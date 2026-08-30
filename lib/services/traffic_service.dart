@@ -54,7 +54,7 @@ class TrafficService {
               : TrafficStatus.active);
       samples
           .add(TrafficSample(time: DateTime.now(), download: down, upload: up));
-      if (samples.length > 60) samples.removeAt(0);
+      if (samples.length > 525600) samples.removeAt(0);
       interfaces
         ..clear()
         ..add(NetworkInterfaceInfo(
@@ -118,6 +118,36 @@ class TrafficService {
       await _logger.error('Не удалось прочитать счётчики Windows');
       return null;
     }
+  }
+
+  List<TrafficSample> samplesFor(HistoryPeriod period) {
+    final window = switch (period) {
+      HistoryPeriod.hour => const Duration(hours: 1),
+      HistoryPeriod.week => const Duration(days: 7),
+      HistoryPeriod.month => const Duration(days: 30),
+      HistoryPeriod.year => const Duration(days: 365),
+    };
+    final since = DateTime.now().subtract(window);
+    final source =
+        samples.where((sample) => sample.time.isAfter(since)).toList();
+    final maxPoints = switch (period) {
+      HistoryPeriod.hour => 120,
+      HistoryPeriod.week => 168,
+      HistoryPeriod.month => 180,
+      HistoryPeriod.year => 365,
+    };
+    if (source.length <= maxPoints) return source;
+    final step = (source.length / maxPoints).ceil();
+    return [for (var i = 0; i < source.length; i += step) source[i]];
+  }
+
+  void resetStatistics() {
+    samples.clear();
+    _previous = null;
+    _downloadTotal = 0;
+    _uploadTotal = 0;
+    stats = const TrafficStats();
+    _logger.info('Статистика сброшена пользователем');
   }
 
   void dispose() => _timer?.cancel();

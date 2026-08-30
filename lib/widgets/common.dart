@@ -8,7 +8,7 @@ class PageShell extends StatelessWidget {
   final Widget child;
   final Widget? action;
   @override
-  Widget build(BuildContext context) => SingleChildScrollView(
+  Widget build(BuildContext context) => Padding(
       padding: const EdgeInsets.fromLTRB(30, 28, 30, 28),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [

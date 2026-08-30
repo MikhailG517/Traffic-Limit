@@ -7,6 +7,7 @@ import 'pages/settings_page.dart';
 import 'services/logger_service.dart';
 import 'services/settings_service.dart';
 import 'services/traffic_service.dart';
+import 'services/tray_service.dart';
 import 'theme.dart';
 
 class TrafficLimitApp extends StatefulWidget {
@@ -14,10 +15,12 @@ class TrafficLimitApp extends StatefulWidget {
       {super.key,
       required this.settings,
       required this.logger,
-      required this.traffic});
+      required this.traffic,
+      required this.tray});
   final SettingsService settings;
   final LoggerService logger;
   final TrafficService traffic;
+  final TrayService tray;
   @override
   State<TrafficLimitApp> createState() => _TrafficLimitAppState();
 }
@@ -32,6 +35,8 @@ class _TrafficLimitAppState extends State<TrafficLimitApp> {
     appSettings = widget.settings.load();
     widget.traffic.start(() {
       if (mounted) setState(() => stats = widget.traffic.stats);
+      widget.tray.update(
+          widget.traffic.stats.downloadRate, widget.traffic.stats.uploadRate);
     });
   }
 

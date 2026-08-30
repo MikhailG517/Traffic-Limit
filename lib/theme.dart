@@ -17,15 +17,28 @@ class AppColors {
 
 final appTheme = ThemeData.dark(useMaterial3: true).copyWith(
   scaffoldBackgroundColor: AppColors.background,
-  colorScheme: const ColorScheme.dark(primary: AppColors.blue, secondary: AppColors.cyan, surface: AppColors.card),
+  colorScheme: const ColorScheme.dark(
+      primary: AppColors.blue,
+      secondary: AppColors.cyan,
+      surface: AppColors.card),
   textTheme: const TextTheme(
     bodyMedium: TextStyle(color: AppColors.text, fontSize: 14),
-    titleLarge: TextStyle(color: AppColors.text, fontWeight: FontWeight.w800, fontSize: 26),
-    titleMedium: TextStyle(color: AppColors.text, fontWeight: FontWeight.w700, fontSize: 16),
+    titleLarge: TextStyle(
+        color: AppColors.text, fontWeight: FontWeight.w800, fontSize: 26),
+    titleMedium: TextStyle(
+        color: AppColors.text, fontWeight: FontWeight.w700, fontSize: 16),
   ),
   cardTheme: CardThemeData(
-    color: AppColors.card, elevation: 0, margin: EdgeInsets.zero,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(16)), side: BorderSide(color: AppColors.border)),
+    color: AppColors.card,
+    elevation: 0,
+    margin: EdgeInsets.zero,
+    shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(16)),
+        side: BorderSide(color: AppColors.border)),
   ),
-  sliderTheme: const SliderThemeData(activeTrackColor: AppColors.blue, thumbColor: Colors.white, overlayColor: Color(0x334f8cff), inactiveTrackColor: Color(0xff2a303c)),
+  sliderTheme: const SliderThemeData(
+      activeTrackColor: AppColors.blue,
+      thumbColor: Colors.white,
+      overlayColor: Color(0x334f8cff),
+      inactiveTrackColor: Color(0xff2a303c)),
 );

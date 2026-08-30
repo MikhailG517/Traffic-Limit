@@ -1,15 +1,26 @@
 import 'dart:io';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
+import '../models/traffic_models.dart';
 
 class TrayService with TrayListener {
   Future<void> initialize(
       {required void Function() onShow,
       required void Function() onPause}) async {
     trayManager.addListener(this);
-    final icon = File(
-        '${Platform.resolvedExecutable.split(Platform.pathSeparator).sublist(0, Platform.resolvedExecutable.split(Platform.pathSeparator).length - 1).join(Platform.pathSeparator)}${Platform.pathSeparator}data${Platform.pathSeparator}flutter_assets${Platform.pathSeparator}assets${Platform.pathSeparator}traffic_limit.png');
-    if (icon.existsSync()) await trayManager.setIcon(icon.path);
+    final base = File(Platform.resolvedExecutable).parent.path;
+    final icons = [
+      File(
+          '$base${Platform.pathSeparator}data${Platform.pathSeparator}flutter_assets${Platform.pathSeparator}assets${Platform.pathSeparator}traffic_limit.ico'),
+      File(
+          '$base${Platform.pathSeparator}data${Platform.pathSeparator}flutter_assets${Platform.pathSeparator}assets${Platform.pathSeparator}traffic_limit.png'),
+    ];
+    for (final icon in icons) {
+      if (icon.existsSync()) {
+        await trayManager.setIcon(icon.path);
+        break;
+      }
+    }
     await trayManager
         .setToolTip('Traffic Limit · загрузка 0 Кбит/с · отдача 0 Кбит/с');
     await trayManager.setContextMenu(Menu(items: [
@@ -22,7 +33,7 @@ class TrayService with TrayListener {
   }
 
   Future<void> update(double download, double upload) => trayManager.setToolTip(
-      'Traffic Limit · ↓ ${download.toStringAsFixed(1)} Кбит/с · ↑ ${upload.toStringAsFixed(1)} Кбит/с');
+      'Traffic Limit · ↓ ${formatRate(download)} · ↑ ${formatRate(upload)}');
   @override
   void onTrayIconMouseDown() => windowManager.show();
   @override

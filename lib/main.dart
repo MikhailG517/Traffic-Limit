@@ -26,5 +26,6 @@ Future<void> main() async {
   runApp(TrafficLimitApp(
       settings: SettingsService(preferences),
       logger: logger,
-      traffic: TrafficService(logger)));
+      traffic: TrafficService(logger),
+      tray: tray));
 }

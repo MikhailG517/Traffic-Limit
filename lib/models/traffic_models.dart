@@ -2,6 +2,8 @@ import 'dart:math';
 
 enum TrafficStatus { active, unavailable, error }
 
+enum HistoryPeriod { hour, week, month, year }
+
 class TrafficSample {
   const TrafficSample(
       {required this.time, required this.download, required this.upload});
@@ -66,8 +68,12 @@ class ProcessTraffic {
   final int color;
 }
 
-String formatRate(double value) =>
-    '${value.toStringAsFixed(value >= 100 ? 0 : 1)} Кбит/с';
+String formatRate(double value) {
+  if (value >= 1000)
+    return '${(value / 1000).toStringAsFixed(value >= 10000 ? 1 : 2)} Мбит/с';
+  return '${value.toStringAsFixed(value >= 100 ? 0 : 1)} Кбит/с';
+}
+
 String formatData(double megabytes) {
   if (megabytes >= 1024) return '${(megabytes / 1024).toStringAsFixed(1)} ГБ';
   return '${megabytes.toStringAsFixed(megabytes >= 100 ? 0 : 1)} МБ';
