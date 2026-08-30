@@ -47,33 +47,8 @@ class DashboardPage extends StatelessWidget {
                   color: AppColors.green,
                   icon: Icons.download_rounded,
                   subtitle: '↑ ${formatData(stats.uploadTotal)} исходящего')),
-          const SizedBox(width: 16),
-          Expanded(
-              child: StatCard(
-                  label: 'Сегодня',
-                  value: '898.5 МБ',
-                  color: AppColors.green,
-                  icon: Icons.today_rounded,
-                  subtitle: '↑ 1,0 ГБ исходящего')),
-          const SizedBox(width: 16),
-          Expanded(
-              child: StatCard(
-                  label: 'Неделя',
-                  value: '4.2 ГБ',
-                  color: AppColors.green,
-                  icon: Icons.date_range_rounded,
-                  subtitle: '↑ 2.8 ГБ исходящего')),
-          const SizedBox(width: 16),
-          Expanded(
-              child: StatCard(
-                  label: 'Месяц',
-                  value: '12.6 ГБ',
-                  color: AppColors.green,
-                  icon: Icons.calendar_month_rounded,
-                  subtitle: '↑ 6.4 ГБ исходящего'))
         ]),
         const SizedBox(height: 18),
-        _quickActions(),
         const SizedBox(height: 18),
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Expanded(child: _interfaces()),
@@ -120,21 +95,6 @@ class DashboardPage extends StatelessWidget {
                         child: CustomPaint(
                             painter: SparklinePainter(values, color)))
                   ])));
-  Widget _quickActions() => SectionCard(
-          child: Row(children: [
-        const Text('Быстрые действия',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-        const SizedBox(width: 30),
-        Switch(
-            value: !settings.paused,
-            onChanged: (v) => onSettingsChanged(settings.copyWith(paused: !v))),
-        Text(settings.paused ? 'Ограничения на паузе' : 'Пауза ограничений',
-            style: const TextStyle(color: AppColors.muted)),
-        const SizedBox(width: 28),
-        const Text('Профиль', style: TextStyle(color: AppColors.muted)),
-        const SizedBox(width: 12),
-        const Chip(label: Text('Полная скорость'))
-      ]));
   Widget _interfaces() => SectionCard(
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -154,26 +114,40 @@ class DashboardPage extends StatelessWidget {
                 '↓ ${formatRate(i.download)}  ↑ ${formatRate(i.upload)}',
                 style: const TextStyle(color: AppColors.green, fontSize: 12))))
       ]));
-  Widget _processes() => SectionCard(
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Приложения',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-        const SizedBox(height: 12),
-        ...service.processes.take(2).map((p) => ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: CircleAvatar(
-                radius: 16,
-                backgroundColor: Color(p.color),
-                child: Text(p.name[0].toUpperCase())),
-            title: Text(p.name,
-                style: const TextStyle(fontWeight: FontWeight.w700)),
-            subtitle: Text('PID ${p.pid}',
-                style: const TextStyle(color: AppColors.muted)),
-            trailing: Text(
-                '↓ ${formatRate(p.download)}  ↑ ${formatRate(p.upload)}',
-                style: const TextStyle(color: AppColors.red, fontSize: 12))))
+  Widget _processes() {
+    final rows = <Widget>[];
+    for (var index = 0; index < service.processes.length; index += 2) {
+      rows.add(Row(children: [
+        Expanded(child: _processTile(service.processes[index])),
+        const SizedBox(width: 12),
+        Expanded(
+            child: index + 1 < service.processes.length
+                ? _processTile(service.processes[index + 1])
+                : const SizedBox()),
       ]));
+    }
+    return SectionCard(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('Приложения',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+      const SizedBox(height: 12),
+      ...rows,
+    ]));
+  }
+
+  Widget _processTile(ProcessTraffic process) => ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: CircleAvatar(
+          radius: 16,
+          backgroundColor: Color(process.color),
+          child: Text(process.name[0].toUpperCase())),
+      title: Text(process.name,
+          style: const TextStyle(fontWeight: FontWeight.w700)),
+      subtitle: Text('PID ${process.pid}',
+          style: const TextStyle(color: AppColors.muted)),
+      trailing: Text(
+          '↓ ${formatRate(process.download)} ↑ ${formatRate(process.upload)}',
+          style: const TextStyle(color: AppColors.red, fontSize: 11)));
 }
 
 class SparklinePainter extends CustomPainter {

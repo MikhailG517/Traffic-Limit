@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:window_manager/window_manager.dart';
 import 'models/traffic_models.dart';
 import 'pages/dashboard_page.dart';
 import 'pages/graphs_page.dart';
@@ -25,25 +26,48 @@ class TrafficLimitApp extends StatefulWidget {
   State<TrafficLimitApp> createState() => _TrafficLimitAppState();
 }
 
-class _TrafficLimitAppState extends State<TrafficLimitApp> {
+class _TrafficLimitAppState extends State<TrafficLimitApp> with WindowListener {
   late AppSettings appSettings;
   TrafficStats stats = const TrafficStats();
   int selected = 0;
   @override
   void initState() {
     super.initState();
+    windowManager.addListener(this);
     appSettings = widget.settings.load();
+    widget.tray.onPauseCallback = _toggleFromTray;
     widget.traffic.start(() {
-      if (mounted) setState(() => stats = widget.traffic.stats);
-      widget.tray.update(
-          widget.traffic.stats.downloadRate, widget.traffic.stats.uploadRate);
+      if (!mounted) return;
+      final current = widget.traffic.stats;
+      setState(() => stats = current);
+      widget.tray.update(current.downloadRate, current.uploadRate);
+      if (appSettings.limitsEnabled &&
+          appSettings.autoPauseAtLimit &&
+          widget.traffic.monthlyTotal >= appSettings.monthlyLimit * 1024) {
+        updateSettings(
+            appSettings.copyWith(limitsEnabled: false, paused: true));
+      }
     });
   }
 
   @override
   void dispose() {
+    windowManager.removeListener(this);
     widget.traffic.dispose();
     super.dispose();
+  }
+
+  @override
+  Future<void> onWindowClose() async {
+    await windowManager.hide();
+  }
+
+  Future<void> _toggleFromTray() async {
+    final enabled = !appSettings.limitsEnabled;
+    final applied = await widget.traffic.setLimitsEnabled(
+        enabled, appSettings.downloadLimit, appSettings.uploadLimit);
+    if (applied)
+      await updateSettings(appSettings.copyWith(limitsEnabled: enabled));
   }
 
   Future<void> updateSettings(AppSettings value) async {
@@ -61,7 +85,7 @@ class _TrafficLimitAppState extends State<TrafficLimitApp> {
               child: Row(children: [
         NavigationRailPanel(
             selected: selected,
-            used: stats.downloadTotal + stats.uploadTotal,
+            used: widget.traffic.monthlyTotal,
             monthlyLimit: appSettings.monthlyLimit,
             onSelected: (value) => setState(() => selected = value)),
         Expanded(child: _page())

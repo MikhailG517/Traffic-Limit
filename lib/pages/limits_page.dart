@@ -21,25 +21,39 @@ class _LimitsPageState extends State<LimitsPage> {
   late double download;
   late double upload;
   bool applying = false;
+  bool enabled = false;
   @override
   void initState() {
     super.initState();
     download = widget.settings.downloadLimit;
     upload = widget.settings.uploadLimit;
+    enabled = widget.settings.limitsEnabled;
   }
 
   Future<void> apply() async {
     setState(() => applying = true);
-    final available = await widget.traffic.applyLimit(download, upload);
-    widget.onChanged(
-        widget.settings.copyWith(downloadLimit: download, uploadLimit: upload));
+    final available =
+        await widget.traffic.setLimitsEnabled(enabled, download, upload);
+    if (available) {
+      widget.onChanged(widget.settings.copyWith(
+          limitsEnabled: enabled,
+          downloadLimit: download,
+          uploadLimit: upload));
+    } else {
+      setState(() => enabled = false);
+    }
     if (mounted) {
       setState(() => applying = false);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(available
-              ? 'Ограничение применено к службе.'
-              : 'Ограничение не применено: требуется подписанный WinDivert-драйвер и права администратора.')));
+              ? (enabled ? 'Ограничения включены.' : 'Ограничения отключены.')
+              : 'Не удалось изменить состояние: нужна служба и подписанный WinDivert-драйвер.')));
     }
+  }
+
+  Future<void> toggle(bool value) async {
+    setState(() => enabled = value);
+    await apply();
   }
 
   @override
@@ -49,8 +63,18 @@ class _LimitsPageState extends State<LimitsPage> {
         SectionCard(
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Скорость соединения',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          Row(children: [
+            const Expanded(
+                child: Text('Скорость соединения',
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.w700))),
+            FilledButton.icon(
+                onPressed: applying ? null : () => toggle(!enabled),
+                icon: Icon(enabled
+                    ? Icons.pause_circle_outline_rounded
+                    : Icons.play_circle_outline_rounded),
+                label: Text(enabled ? 'Отключить' : 'Включить')),
+          ]),
           const SizedBox(height: 18),
           _speed(
               'Входящая скорость',
@@ -114,9 +138,10 @@ class _LimitsPageState extends State<LimitsPage> {
             child: ToggleRow(
                 title: 'Автопауза при достижении лимита',
                 description:
-                    'Полностью останавливать трафик при исчерпании лимита',
-                value: false,
-                onChanged: (_) {}))
+                    'Остановить ограничение при достижении месячного лимита',
+                value: widget.settings.autoPauseAtLimit,
+                onChanged: (value) => widget.onChanged(
+                    widget.settings.copyWith(autoPauseAtLimit: value))))
       ]));
   Widget _speed(String title, double value, Color color,
           ValueChanged<double> onChanged, IconData icon) =>

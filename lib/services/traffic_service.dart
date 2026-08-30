@@ -1,12 +1,14 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/traffic_models.dart';
 import 'logger_service.dart';
 
 class TrafficService {
-  TrafficService(this._logger);
+  TrafficService(this._logger, this._preferences);
   final LoggerService _logger;
+  final SharedPreferences _preferences;
   final _random = Random();
   Timer? _timer;
   bool _busy = false;
@@ -16,8 +18,16 @@ class TrafficService {
   final interfaces = <NetworkInterfaceInfo>[];
   final processes = <ProcessTraffic>[];
   double _downloadTotal = 899.7;
-  double _uploadTotal = 1024;
+  double _uploadTotal = 0;
+  double _monthlyTotal = 0;
+  String get _monthKey => '${DateTime.now().year}-${DateTime.now().month}';
+  double get monthlyTotal => _monthlyTotal;
   void start(void Function() onUpdate) {
+    if (_preferences.getString('trafficMonth') != _monthKey) {
+      _preferences.setString('trafficMonth', _monthKey);
+      _preferences.setDouble('monthlyTotal', 0);
+    }
+    _monthlyTotal = _preferences.getDouble('monthlyTotal') ?? 0;
     _logger.info('Запуск мониторинга сетевых интерфейсов');
     _timer =
         Timer.periodic(const Duration(seconds: 1), (_) => _sample(onUpdate));
@@ -40,9 +50,15 @@ class TrafficService {
               ? 0
               : max(0, (actual.sent - _previous!.sent) * 8 / 1000));
       if (actual != null) {
+        if (_previous != null) {
+          final receivedDelta = max(0, actual.received - _previous!.received);
+          final sentDelta = max(0, actual.sent - _previous!.sent);
+          _downloadTotal += receivedDelta / 1024 / 1024;
+          _uploadTotal += sentDelta / 1024 / 1024;
+          _monthlyTotal += (receivedDelta + sentDelta) / 1024 / 1024;
+          await _preferences.setDouble('monthlyTotal', _monthlyTotal);
+        }
         _previous = actual;
-        _downloadTotal = actual.received / 1024 / 1024;
-        _uploadTotal = actual.sent / 1024 / 1024;
       }
       stats = TrafficStats(
           downloadRate: down,
@@ -146,11 +162,25 @@ class TrafficService {
     _previous = null;
     _downloadTotal = 0;
     _uploadTotal = 0;
+    _monthlyTotal = 0;
+    _preferences.setDouble('monthlyTotal', 0);
     stats = const TrafficStats();
     _logger.info('Статистика сброшена пользователем');
   }
 
   void dispose() => _timer?.cancel();
+  Future<bool> setLimitsEnabled(
+      bool enabled, double download, double upload) async {
+    if (enabled) return applyLimit(download, upload);
+    if (!Platform.isWindows) return false;
+    final service = File(
+        '${File(Platform.resolvedExecutable).parent.path}${Platform.pathSeparator}TrafficLimitService.exe');
+    if (!service.existsSync()) return false;
+    final result = await Process.run(service.path, ['--disable']);
+    await _logger.info('Ограничения ${enabled ? 'включены' : 'отключены'}');
+    return result.exitCode == 0;
+  }
+
   Future<bool> applyLimit(double download, double upload) async {
     await _logger.info(
         'Запрошено ограничение: входящий ${download.toStringAsFixed(1)} Мбит/с, исходящий ${upload.toStringAsFixed(1)} Мбит/с');

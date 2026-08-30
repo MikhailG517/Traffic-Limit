@@ -19,6 +19,7 @@ Future<void> main() async {
     await windowManager.show();
     await windowManager.focus();
   });
+  await windowManager.setPreventClose(true);
   final preferences = await SharedPreferences.getInstance();
   final logger = LoggerService();
   final tray = TrayService();
@@ -26,6 +27,6 @@ Future<void> main() async {
   runApp(TrafficLimitApp(
       settings: SettingsService(preferences),
       logger: logger,
-      traffic: TrafficService(logger),
+      traffic: TrafficService(logger, preferences),
       tray: tray));
 }
