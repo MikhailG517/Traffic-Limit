@@ -166,7 +166,7 @@ class DashboardPage extends StatelessWidget {
             subtitle:
                 Text(i.type, style: const TextStyle(color: AppColors.muted)),
             trailing: Text(
-                '↓ ${i.download.toStringAsFixed(1)}  ↑ ${i.upload.toStringAsFixed(1)} Кбит/с',
+                '↓ ${formatRate(i.download)}  ↑ ${formatRate(i.upload)}',
                 style: const TextStyle(color: AppColors.green, fontSize: 12))))
       ]));
   Widget _processes() => SectionCard(
@@ -186,7 +186,7 @@ class DashboardPage extends StatelessWidget {
             subtitle: Text('PID ${p.pid}',
                 style: const TextStyle(color: AppColors.muted)),
             trailing: Text(
-                '↓ ${p.download.toStringAsFixed(1)}  ↑ ${p.upload.toStringAsFixed(1)}',
+                '↓ ${formatRate(p.download)}  ↑ ${formatRate(p.upload)}',
                 style: const TextStyle(color: AppColors.red, fontSize: 12))))
       ]));
 }
