@@ -16,7 +16,7 @@ class PageShell extends StatelessWidget {
           if (action != null) action!
         ]),
         const SizedBox(height: 22),
-        child
+        Expanded(child: child)
       ]));
 }
 

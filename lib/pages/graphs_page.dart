@@ -73,11 +73,18 @@ class _GraphsPageState extends State<GraphsPage> {
                         fontSize: 16, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 12),
                 Expanded(
-                    child: CustomPaint(
-                        painter: TrafficChartPainter(
-                            values.map((e) => e.download).toList(),
-                            values.map((e) => e.upload).toList()),
-                        child: const SizedBox.expand())),
+                    child: Stack(children: [
+                  Positioned.fill(
+                      child: CustomPaint(
+                          painter: TrafficChartPainter(
+                              values.map((e) => e.download).toList(),
+                              values.map((e) => e.upload).toList()))),
+                  if (values.length < 2)
+                    const Center(
+                        child: Text(
+                            'Недостаточно накопленной истории для этого периода',
+                            style: TextStyle(color: AppColors.muted)))
+                ])),
                 const SizedBox(height: 10),
                 const Row(children: [
                   LegendDot(color: AppColors.green, text: 'Загрузка'),

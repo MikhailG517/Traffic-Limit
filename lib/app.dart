@@ -61,6 +61,8 @@ class _TrafficLimitAppState extends State<TrafficLimitApp> {
               child: Row(children: [
         NavigationRailPanel(
             selected: selected,
+            used: stats.downloadTotal + stats.uploadTotal,
+            monthlyLimit: appSettings.monthlyLimit,
             onSelected: (value) => setState(() => selected = value)),
         Expanded(child: _page())
       ]))));
@@ -90,8 +92,13 @@ class _TrafficLimitAppState extends State<TrafficLimitApp> {
 
 class NavigationRailPanel extends StatelessWidget {
   const NavigationRailPanel(
-      {super.key, required this.selected, required this.onSelected});
+      {super.key,
+      required this.selected,
+      required this.onSelected,
+      required this.used,
+      required this.monthlyLimit});
   final int selected;
+  final double used, monthlyLimit;
   final ValueChanged<int> onSelected;
   @override
   Widget build(BuildContext context) => Container(
@@ -119,7 +126,7 @@ class NavigationRailPanel extends StatelessWidget {
             .entries
             .map((entry) => _item(context, entry.key, entry.value)),
         const Spacer(),
-        const MonthlyUsage(),
+        MonthlyUsage(used: used, limit: monthlyLimit),
       ]));
   Widget _item(BuildContext context, int index, String label) => InkWell(
       onTap: () => onSelected(index),
@@ -156,36 +163,41 @@ class NavigationRailPanel extends StatelessWidget {
 }
 
 class MonthlyUsage extends StatelessWidget {
-  const MonthlyUsage({super.key});
+  const MonthlyUsage({super.key, required this.used, required this.limit});
+  final double used;
+  final double limit;
   @override
-  Widget build(BuildContext context) => Container(
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-          color: AppColors.card,
-          border: Border.all(color: AppColors.border),
-          borderRadius: BorderRadius.circular(14)),
-      child:
-          const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('ЛИМИТ МЕСЯЦА',
-            style: TextStyle(
-                color: AppColors.lightBlue,
-                fontSize: 12,
-                fontWeight: FontWeight.w700)),
-        SizedBox(height: 13),
-        LinearProgressIndicator(
-            value: .19,
-            minHeight: 6,
-            backgroundColor: Color(0xff29303d),
-            valueColor: AlwaysStoppedAnimation(AppColors.cyan)),
-        SizedBox(height: 11),
-        Text.rich(TextSpan(
-            text: '1,9 ГБ',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-            children: [
-              TextSpan(
-                  text: ' из 10 ГБ',
-                  style: TextStyle(
-                      color: AppColors.muted, fontWeight: FontWeight.w400))
-            ]))
-      ]));
+  Widget build(BuildContext context) {
+    final progress = limit <= 0 ? 0.0 : (used / (limit * 1024)).clamp(0.0, 1.0);
+    return Container(
+        padding: const EdgeInsets.all(15),
+        decoration: BoxDecoration(
+            color: AppColors.card,
+            border: Border.all(color: AppColors.border),
+            borderRadius: BorderRadius.circular(14)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('ЛИМИТ МЕСЯЦА',
+              style: TextStyle(
+                  color: AppColors.lightBlue,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700)),
+          const SizedBox(height: 13),
+          LinearProgressIndicator(
+              value: progress,
+              minHeight: 6,
+              backgroundColor: const Color(0xff29303d),
+              valueColor: const AlwaysStoppedAnimation(AppColors.cyan)),
+          const SizedBox(height: 11),
+          Text.rich(TextSpan(
+              text: formatData(used),
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.w700),
+              children: [
+                TextSpan(
+                    text: ' из ${limit.toStringAsFixed(0)} ГБ',
+                    style: const TextStyle(
+                        color: AppColors.muted, fontWeight: FontWeight.w400))
+              ])),
+        ]));
+  }
 }

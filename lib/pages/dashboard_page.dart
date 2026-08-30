@@ -80,22 +80,7 @@ class DashboardPage extends StatelessWidget {
           const SizedBox(width: 16),
           Expanded(child: _processes())
         ]),
-        const SizedBox(height: 18),
-        Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(.07),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.orange.withOpacity(.25))),
-            child: const Row(children: [
-              Icon(Icons.info_outline_rounded, color: Colors.orange),
-              SizedBox(width: 10),
-              Expanded(
-                  child: Text(
-                      'Ограничение недоступно: установите Traffic Limit Service и перезапустите приложение с правами администратора.',
-                      style: TextStyle(color: Colors.orange)))
-            ])),
+        const SizedBox(height: 4),
       ]));
   Widget _trafficCard(String label, String rate, Color color, IconData icon,
           List<double> values) =>
@@ -175,7 +160,7 @@ class DashboardPage extends StatelessWidget {
         const Text('Приложения',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
         const SizedBox(height: 12),
-        ...service.processes.map((p) => ListTile(
+        ...service.processes.take(2).map((p) => ListTile(
             contentPadding: EdgeInsets.zero,
             leading: CircleAvatar(
                 radius: 16,
