@@ -55,26 +55,28 @@ class ApplicationsPage extends StatelessWidget {
                 'Скорость',
                 process.hasByteCounters
                     ? '↓ ${formatRate(process.download)} ↑ ${formatRate(process.upload)}'
-                    : 'Недоступна',
+                    : '↓ 0 Кбит/с ↑ 0 Кбит/с',
                 AppColors.blue)),
         Expanded(
             child: _metric(
                 'Входящий',
                 process.hasByteCounters
                     ? formatData(process.downloadTotal)
-                    : '—',
+                    : '0 МБ',
                 AppColors.green)),
         Expanded(
             child: _metric(
                 'Исходящий',
-                process.hasByteCounters ? formatData(process.uploadTotal) : '—',
+                process.hasByteCounters
+                    ? formatData(process.uploadTotal)
+                    : '0 МБ',
                 AppColors.red)),
         Expanded(
             child: _metric(
                 'Всего',
                 process.hasByteCounters
                     ? formatData(process.downloadTotal + process.uploadTotal)
-                    : '—',
+                    : '0 МБ',
                 AppColors.text))
       ]));
   Widget _metric(String label, String value, Color color) =>

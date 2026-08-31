@@ -75,8 +75,9 @@ class ProcessTraffic {
 }
 
 String formatRate(double value) {
-  if (value >= 1000)
+  if (value >= 1000) {
     return '${(value / 1000).toStringAsFixed(value >= 10000 ? 1 : 2)} Мбит/с';
+  }
   return '${value.toStringAsFixed(value >= 100 ? 0 : 1)} Кбит/с';
 }
 

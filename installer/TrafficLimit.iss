@@ -28,7 +28,7 @@ Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
 [Tasks]
 Name: "desktopicon"; Description: "Создать ярлык на рабочем столе"; Flags: unchecked
-Name: "autostart"; Description: "Запускать вместе с Windows"; Flags: unchecked
+Name: "autostart"; Description: "Запускать вместе с Windows"
 [Run]
 Filename: "{app}\TrafficLimitService.exe"; Parameters: "--install"; Flags: runhidden waituntilterminated
 Filename: "{app}\{#AppExeName}"; Description: "Запустить Traffic Limit"; Flags: nowait postinstall skipifsilent

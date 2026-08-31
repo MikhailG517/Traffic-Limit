@@ -63,8 +63,11 @@ class TrafficService {
         .where((entry) => entry.key.startsWith(
             '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}'))
         .fold<double>(0, (sum, entry) => sum + entry.value);
-    _downloadTotal = _preferences.getDouble('sessionDownload') ?? 0;
-    _uploadTotal = _preferences.getDouble('sessionUpload') ?? 0;
+    // Сессия относится к текущему запуску приложения; суточный журнал хранится отдельно.
+    _downloadTotal = 0;
+    _uploadTotal = 0;
+    await _preferences.remove('sessionDownload');
+    await _preferences.remove('sessionUpload');
     await _preferences.setDouble('monthlyTotal', _monthlyTotal);
     final savedSamples = _preferences.getString('trafficSamples');
     if (savedSamples != null) {
@@ -211,8 +214,9 @@ class TrafficService {
     if (!service.existsSync()) return {};
     try {
       final result = await Process.run(service.path, ['--get-processes']);
-      if (result.exitCode != 0 || result.stdout.toString().trim().isEmpty)
+      if (result.exitCode != 0 || result.stdout.toString().trim().isEmpty) {
         return {};
+      }
       final decoded = jsonDecode(result.stdout.toString()) as List<dynamic>;
       return {
         for (final item in decoded)

@@ -75,7 +75,7 @@ class DashboardPage extends StatelessWidget {
               decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(16),
                   gradient: LinearGradient(
-                      colors: [AppColors.card, color.withOpacity(.10)])),
+                      colors: [AppColors.card, color.withValues(alpha: .10)])),
               child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -83,7 +83,7 @@ class DashboardPage extends StatelessWidget {
                       Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                              color: color.withOpacity(.14),
+                              color: color.withValues(alpha: .14),
                               borderRadius: BorderRadius.circular(12)),
                           child: Icon(icon, color: color)),
                       const SizedBox(width: 12),

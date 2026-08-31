@@ -9,18 +9,21 @@ class SettingsPage extends StatelessWidget {
       {super.key,
       required this.settings,
       required this.onChanged,
-      required this.system});
+      required this.system,
+      required this.onExit});
   final AppSettings settings;
   final ValueChanged<AppSettings> onChanged;
   final SystemSettingsService system;
+  final Future<void> Function() onExit;
   Future<void> _autostart(BuildContext context, bool enabled) async {
     final ok = await system.setAutostart(enabled);
     if (!context.mounted) return;
-    if (ok)
+    if (ok) {
       onChanged(settings.copyWith(autostart: enabled));
-    else
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Не удалось изменить автозапуск Windows.')));
+    }
   }
 
   @override
@@ -50,6 +53,17 @@ class SettingsPage extends StatelessWidget {
             onChanged: (value) =>
                 onChanged(settings.copyWith(limitNotifications: value))),
         const Divider(color: AppColors.border),
+        Padding(
+            padding: const EdgeInsets.only(top: 15),
+            child: Row(children: [
+              const Expanded(
+                  child: Text('Завершение приложения',
+                      style: TextStyle(fontWeight: FontWeight.w700))),
+              OutlinedButton.icon(
+                  onPressed: onExit,
+                  icon: const Icon(Icons.power_settings_new_rounded),
+                  label: const Text('Завершить')),
+            ])),
         Padding(
             padding: const EdgeInsets.symmetric(vertical: 15),
             child: Row(children: [

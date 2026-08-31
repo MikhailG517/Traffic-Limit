@@ -28,7 +28,7 @@ final appTheme = ThemeData.dark(useMaterial3: true).copyWith(
     titleMedium: TextStyle(
         color: AppColors.text, fontWeight: FontWeight.w700, fontSize: 16),
   ),
-  cardTheme: CardThemeData(
+  cardTheme: const CardThemeData(
     color: AppColors.card,
     elevation: 0,
     margin: EdgeInsets.zero,

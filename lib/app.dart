@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 import 'models/traffic_models.dart';
@@ -40,6 +41,7 @@ class _TrafficLimitAppState extends State<TrafficLimitApp> with WindowListener {
     windowManager.addListener(this);
     appSettings = widget.settings.load();
     widget.tray.onPauseCallback = _toggleFromTray;
+    _syncAutostart();
     widget.traffic.start(() {
       if (!mounted) return;
       final current = widget.traffic.stats;
@@ -53,6 +55,26 @@ class _TrafficLimitAppState extends State<TrafficLimitApp> with WindowListener {
             appSettings.copyWith(limitsEnabled: false, paused: true));
       }
     });
+    if (appSettings.limitsEnabled) _restoreLimit();
+  }
+
+  Future<void> _restoreLimit() async {
+    var applied = false;
+    for (var attempt = 0; attempt < 5 && !applied; attempt++) {
+      if (attempt > 0) {
+        await Future<void>.delayed(const Duration(seconds: 2));
+      }
+      applied = await widget.traffic
+          .applyLimit(appSettings.downloadLimit, appSettings.uploadLimit);
+    }
+    if (!mounted || applied) return;
+    await updateSettings(appSettings.copyWith(limitsEnabled: false));
+  }
+
+  Future<void> _syncAutostart() async {
+    final enabled = await widget.system.isAutostartEnabled();
+    if (!mounted || enabled == null || enabled == appSettings.autostart) return;
+    await updateSettings(appSettings.copyWith(autostart: enabled));
   }
 
   @override
@@ -67,12 +89,20 @@ class _TrafficLimitAppState extends State<TrafficLimitApp> with WindowListener {
     await windowManager.hide();
   }
 
+  Future<void> _exitApp() async {
+    widget.traffic.dispose();
+    await widget.tray.dispose();
+    await windowManager.destroy();
+    exit(0);
+  }
+
   Future<void> _toggleFromTray() async {
     final enabled = !appSettings.limitsEnabled;
     final applied = await widget.traffic.setLimitsEnabled(
         enabled, appSettings.downloadLimit, appSettings.uploadLimit);
-    if (applied)
+    if (applied) {
       await updateSettings(appSettings.copyWith(limitsEnabled: enabled));
+    }
   }
 
   Future<void> updateSettings(AppSettings value) async {
@@ -113,7 +143,8 @@ class _TrafficLimitAppState extends State<TrafficLimitApp> with WindowListener {
         return SettingsPage(
             settings: appSettings,
             onChanged: updateSettings,
-            system: widget.system);
+            system: widget.system,
+            onExit: _exitApp);
       default:
         return DashboardPage(stats: stats, service: widget.traffic);
     }
