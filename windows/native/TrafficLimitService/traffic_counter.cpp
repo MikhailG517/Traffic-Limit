@@ -1,6 +1,7 @@
 #include <winsock2.h>
 #include <windows.h>
 #include <iphlpapi.h>
+#include <netioapi.h>
 #include "traffic_counter.h"
 
 TrafficTotals TrafficCounter::read() const {
