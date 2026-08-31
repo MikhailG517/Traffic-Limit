@@ -25,7 +25,7 @@ flutter pub get
 
 ## Фактическое ограничение скорости
 
-Сборка по умолчанию намеренно сообщает «ограничение недоступно»: системный Windows QoS не предоставляет безопасного универсального token-bucket ограничения для всего трафика из user-mode. Для фактического ограничения используется WinDivert: скачайте официальный WinDivert SDK, положите `include/WinDivert.h` и x64 библиотеку в `windows/native/TrafficLimitService/third_party/WinDivert/`, затем соберите:
+Сборка по умолчанию намеренно сообщает «ограничение недоступно»: системный Windows QoS не предоставляет безопасного универсального token-bucket ограничения для всего трафика из user-mode. Для фактического ограничения используется включённый официальный WinDivert 2.2.2 x64 SDK. Для обновления runtime положите `include/WinDivert.h` и x64 библиотеку в `windows/native/TrafficLimitService/third_party/WinDivert/`, затем соберите:
 
 ```powershell
 cmake -S windows/native/TrafficLimitService -B build/native/cmake -DTRAFFIC_LIMIT_USE_WINDIVERT=ON

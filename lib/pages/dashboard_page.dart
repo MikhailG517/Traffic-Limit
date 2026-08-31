@@ -42,19 +42,36 @@ class DashboardPage extends StatelessWidget {
         Row(children: [
           Expanded(
               child: StatCard(
-                  label: 'Сессия · входящий',
-                  value: formatData(stats.downloadTotal),
+                  label: 'Сессия',
+                  value: formatData(stats.downloadTotal + stats.uploadTotal),
                   color: AppColors.green,
                   icon: Icons.download_rounded,
-                  subtitle: '↑ ${formatData(stats.uploadTotal)} исходящего')),
-        ]),
-        const SizedBox(height: 18),
-        const SizedBox(height: 18),
-        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Expanded(child: _interfaces()),
+                  subtitle:
+                      '↓ ${formatData(stats.downloadTotal)} · ↑ ${formatData(stats.uploadTotal)}')),
           const SizedBox(width: 16),
-          Expanded(child: _processes())
+          Expanded(
+              child: StatCard(
+                  label: 'Сегодня',
+                  value: formatData(service.todayTotal),
+                  color: AppColors.green,
+                  icon: Icons.today_rounded)),
+          const SizedBox(width: 16),
+          Expanded(
+              child: StatCard(
+                  label: 'Неделя',
+                  value: formatData(service.weekTotal),
+                  color: AppColors.green,
+                  icon: Icons.date_range_rounded)),
+          const SizedBox(width: 16),
+          Expanded(
+              child: StatCard(
+                  label: 'Месяц',
+                  value: formatData(service.monthTotal),
+                  color: AppColors.green,
+                  icon: Icons.calendar_month_rounded)),
         ]),
+        const SizedBox(height: 18),
+        Expanded(child: _interfaces()),
         const SizedBox(height: 4),
       ]));
   Widget _trafficCard(String label, String rate, Color color, IconData icon,
@@ -114,40 +131,6 @@ class DashboardPage extends StatelessWidget {
                 '↓ ${formatRate(i.download)}  ↑ ${formatRate(i.upload)}',
                 style: const TextStyle(color: AppColors.green, fontSize: 12))))
       ]));
-  Widget _processes() {
-    final rows = <Widget>[];
-    for (var index = 0; index < service.processes.length; index += 2) {
-      rows.add(Row(children: [
-        Expanded(child: _processTile(service.processes[index])),
-        const SizedBox(width: 12),
-        Expanded(
-            child: index + 1 < service.processes.length
-                ? _processTile(service.processes[index + 1])
-                : const SizedBox()),
-      ]));
-    }
-    return SectionCard(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Text('Приложения',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-      const SizedBox(height: 12),
-      ...rows,
-    ]));
-  }
-
-  Widget _processTile(ProcessTraffic process) => ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: CircleAvatar(
-          radius: 16,
-          backgroundColor: Color(process.color),
-          child: Text(process.name[0].toUpperCase())),
-      title: Text(process.name,
-          style: const TextStyle(fontWeight: FontWeight.w700)),
-      subtitle: Text('PID ${process.pid}',
-          style: const TextStyle(color: AppColors.muted)),
-      trailing: Text(
-          '↓ ${formatRate(process.download)} ↑ ${formatRate(process.upload)}',
-          style: const TextStyle(color: AppColors.red, fontSize: 11)));
 }
 
 class SparklinePainter extends CustomPainter {

@@ -42,3 +42,16 @@ final appTheme = ThemeData.dark(useMaterial3: true).copyWith(
       overlayColor: Color(0x334f8cff),
       inactiveTrackColor: Color(0xff2a303c)),
 );
+
+final lightTheme = ThemeData.light(useMaterial3: true).copyWith(
+  scaffoldBackgroundColor: const Color(0xfff5f7fb),
+  colorScheme: ColorScheme.fromSeed(
+      seedColor: AppColors.blue, brightness: Brightness.light),
+  cardTheme: CardThemeData(
+      color: Colors.white,
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0xffdce2ec)))),
+);

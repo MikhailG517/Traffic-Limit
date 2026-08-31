@@ -5,6 +5,7 @@ import 'app.dart';
 import 'services/logger_service.dart';
 import 'services/settings_service.dart';
 import 'services/tray_service.dart';
+import 'services/system_settings_service.dart';
 import 'services/traffic_service.dart';
 
 Future<void> main() async {
@@ -27,6 +28,7 @@ Future<void> main() async {
   runApp(TrafficLimitApp(
       settings: SettingsService(preferences),
       logger: logger,
+      system: SystemSettingsService(),
       traffic: TrafficService(logger, preferences),
       tray: tray));
 }

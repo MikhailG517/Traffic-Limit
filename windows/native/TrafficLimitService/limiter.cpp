@@ -9,7 +9,7 @@ static HANDLE divertHandle=nullptr;
 PacketLimiter::~PacketLimiter(){stop();}
 bool PacketLimiter::start(uint64_t downloadBits,uint64_t uploadBits){download_=downloadBits;upload_=uploadBits;
 #ifdef TRAFFIC_LIMIT_USE_WINDIVERT
-  if(running_)return true; divertHandle=WinDivertOpen("true",WINDIVERT_LAYER_NETWORK,0,0); if(!divertHandle)return false; running_=true; worker_=std::thread(&PacketLimiter::loop,this); return true;
+  if(running_){ download_=downloadBits; upload_=uploadBits; return true; } divertHandle=WinDivertOpen("true",WINDIVERT_LAYER_NETWORK,0,0); if(!divertHandle)return false; running_=true; worker_=std::thread(&PacketLimiter::loop,this); return true;
 #else
   return false;
 #endif

@@ -32,8 +32,11 @@ class TrayService with TrayListener {
     ]));
   }
 
-  Future<void> update(double download, double upload) => trayManager.setToolTip(
-      'Traffic Limit · ↓ ${formatRate(download)} · ↑ ${formatRate(upload)}');
+  Future<void> update(double download, double upload,
+          {required bool showSpeed}) =>
+      trayManager.setToolTip(showSpeed
+          ? 'Traffic Limit · ↓ ${formatRate(download)} · ↑ ${formatRate(upload)}'
+          : 'Traffic Limit');
   @override
   void onTrayIconMouseDown() => windowManager.show();
   @override

@@ -21,6 +21,8 @@ UninstallDisplayIcon={app}\traffic_limit.exe
 [Files]
 Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\build\native\TrafficLimitService.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\build\native\WinDivert.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\build\native\WinDivert64.sys"; DestDir: "{app}"; Flags: ignoreversion
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon

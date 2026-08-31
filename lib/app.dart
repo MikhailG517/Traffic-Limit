@@ -3,10 +3,12 @@ import 'package:window_manager/window_manager.dart';
 import 'models/traffic_models.dart';
 import 'pages/dashboard_page.dart';
 import 'pages/graphs_page.dart';
+import 'pages/applications_page.dart';
 import 'pages/limits_page.dart';
 import 'pages/settings_page.dart';
 import 'services/logger_service.dart';
 import 'services/settings_service.dart';
+import 'services/system_settings_service.dart';
 import 'services/traffic_service.dart';
 import 'services/tray_service.dart';
 import 'theme.dart';
@@ -16,10 +18,12 @@ class TrafficLimitApp extends StatefulWidget {
       {super.key,
       required this.settings,
       required this.logger,
+      required this.system,
       required this.traffic,
       required this.tray});
   final SettingsService settings;
   final LoggerService logger;
+  final SystemSettingsService system;
   final TrafficService traffic;
   final TrayService tray;
   @override
@@ -40,7 +44,8 @@ class _TrafficLimitAppState extends State<TrafficLimitApp> with WindowListener {
       if (!mounted) return;
       final current = widget.traffic.stats;
       setState(() => stats = current);
-      widget.tray.update(current.downloadRate, current.uploadRate);
+      widget.tray.update(current.downloadRate, current.uploadRate,
+          showSpeed: appSettings.traySpeed);
       if (appSettings.limitsEnabled &&
           appSettings.autoPauseAtLimit &&
           widget.traffic.monthlyTotal >= appSettings.monthlyLimit * 1024) {
@@ -79,7 +84,10 @@ class _TrafficLimitAppState extends State<TrafficLimitApp> with WindowListener {
   Widget build(BuildContext context) => MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Traffic Limit',
-      theme: appTheme,
+      theme: lightTheme,
+      darkTheme: appTheme,
+      themeMode:
+          appSettings.themeMode == 'light' ? ThemeMode.light : ThemeMode.dark,
       home: Scaffold(
           body: SafeArea(
               child: Row(children: [
@@ -95,15 +103,17 @@ class _TrafficLimitAppState extends State<TrafficLimitApp> with WindowListener {
       case 1:
         return GraphsPage(traffic: widget.traffic, stats: stats);
       case 2:
+        return ApplicationsPage(traffic: widget.traffic);
+      case 3:
         return LimitsPage(
             settings: appSettings,
             onChanged: updateSettings,
             traffic: widget.traffic);
-      case 3:
+      case 4:
         return SettingsPage(
             settings: appSettings,
             onChanged: updateSettings,
-            logger: widget.logger);
+            system: widget.system);
       default:
         return DashboardPage(
             stats: stats,
@@ -145,7 +155,7 @@ class NavigationRailPanel extends StatelessWidget {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700))
         ]),
         const SizedBox(height: 42),
-        ...['Обзор', 'Графики', 'Ограничения', 'Настройки']
+        ...['Обзор', 'Графики', 'Приложения', 'Ограничения', 'Настройки']
             .asMap()
             .entries
             .map((entry) => _item(context, entry.key, entry.value)),
@@ -172,6 +182,7 @@ class NavigationRailPanel extends StatelessWidget {
                 [
                   Icons.home_outlined,
                   Icons.bar_chart_rounded,
+                  Icons.apps_rounded,
                   Icons.speed_rounded,
                   Icons.tune_rounded
                 ][index],

@@ -86,18 +86,6 @@ class _LimitsPageState extends State<LimitsPage> {
           _speed('Исходящая скорость', upload, AppColors.red,
               (v) => setState(() => upload = v), Icons.arrow_upward_rounded),
           const SizedBox(height: 10),
-          Align(
-              alignment: Alignment.centerRight,
-              child: FilledButton.icon(
-                  onPressed: applying ? null : apply,
-                  icon: applying
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.check_rounded),
-                  label:
-                      Text(applying ? 'Применение…' : 'Применить ограничения')))
         ])),
         const SizedBox(height: 18),
         Row(children: [
@@ -115,24 +103,6 @@ class _LimitsPageState extends State<LimitsPage> {
                   (v) => widget
                       .onChanged(widget.settings.copyWith(monthlyLimit: v))))
         ]),
-        const SizedBox(height: 18),
-        SectionCard(
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Расписание ограничений',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 16),
-          Wrap(spacing: 10, children: [
-            _chip('Пн–Чт · 09:00–18:00'),
-            _chip('Ночной режим · 23:00–07:00'),
-            ActionChip(
-                label: const Text('+ Добавить'),
-                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text(
-                            'Создание расписания будет доступно после установки службы.'))))
-          ])
-        ])),
         const SizedBox(height: 18),
         SectionCard(
             child: ToggleRow(
@@ -156,9 +126,12 @@ class _LimitsPageState extends State<LimitsPage> {
             child: Slider(
                 value: value,
                 min: 0.1,
-                max: 100,
+                max: 500,
                 divisions: 999,
-                onChanged: onChanged)),
+                onChanged: onChanged,
+                onChangeEnd: (_) {
+                  if (enabled) apply();
+                })),
         SizedBox(
             width: 92,
             child: Text('${value.toStringAsFixed(1)} Мбит/с',
@@ -181,10 +154,4 @@ class _LimitsPageState extends State<LimitsPage> {
             divisions: 99,
             onChanged: onChange)
       ]));
-  Widget _chip(String text) => Chip(
-      label: Text(text,
-          style: const TextStyle(
-              color: AppColors.cyan, fontWeight: FontWeight.w600)),
-      backgroundColor: AppColors.cyan.withOpacity(.08),
-      side: BorderSide(color: AppColors.cyan.withOpacity(.35)));
 }

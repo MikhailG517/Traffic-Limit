@@ -38,9 +38,11 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force build/native | Out-Null
-          cmake -S windows/native/TrafficLimitService -B build/native/cmake -DTRAFFIC_LIMIT_USE_WINDIVERT=OFF
+          cmake -S windows/native/TrafficLimitService -B build/native/cmake
           cmake --build build/native/cmake --config Release
           Copy-Item build/native/cmake/Release/TrafficLimitService.exe build/native/TrafficLimitService.exe -Force
+          Copy-Item build/native/cmake/Release/WinDivert.dll build/native/WinDivert.dll -Force
+          Copy-Item build/native/cmake/Release/WinDivert64.sys build/native/WinDivert64.sys -Force
 
       - name: Install Inno Setup
         shell: pwsh

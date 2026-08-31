@@ -1,5 +1,3 @@
-import 'dart:math';
-
 enum TrafficStatus { active, unavailable, error }
 
 enum HistoryPeriod { hour, week, month, year }
@@ -58,14 +56,22 @@ class ProcessTraffic {
   const ProcessTraffic(
       {required this.name,
       required this.pid,
-      required this.download,
-      required this.upload,
-      required this.color});
+      required this.connections,
+      this.color = 0xff4f8cff,
+      this.hasByteCounters = false,
+      this.download = 0,
+      this.upload = 0,
+      this.downloadTotal = 0,
+      this.uploadTotal = 0});
   final String name;
   final int pid;
+  final int connections;
+  final int color;
+  final bool hasByteCounters;
   final double download;
   final double upload;
-  final int color;
+  final double downloadTotal;
+  final double uploadTotal;
 }
 
 String formatRate(double value) {
@@ -78,6 +84,3 @@ String formatData(double megabytes) {
   if (megabytes >= 1024) return '${(megabytes / 1024).toStringAsFixed(1)} ГБ';
   return '${megabytes.toStringAsFixed(megabytes >= 100 ? 0 : 1)} МБ';
 }
-
-double noise(double base, Random random) =>
-    max(0, base + (random.nextDouble() - .5) * base * .28);
