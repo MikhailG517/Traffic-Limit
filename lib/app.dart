@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
@@ -21,12 +22,14 @@ class TrafficLimitApp extends StatefulWidget {
       required this.logger,
       required this.system,
       required this.traffic,
-      required this.tray});
+      required this.tray,
+      required this.startHidden});
   final SettingsService settings;
   final LoggerService logger;
   final SystemSettingsService system;
   final TrafficService traffic;
   final TrayService tray;
+  final bool startHidden;
   @override
   State<TrafficLimitApp> createState() => _TrafficLimitAppState();
 }
@@ -40,7 +43,7 @@ class _TrafficLimitAppState extends State<TrafficLimitApp> with WindowListener {
     super.initState();
     windowManager.addListener(this);
     appSettings = widget.settings.load();
-    widget.tray.onPauseCallback = _toggleFromTray;
+    unawaited(_initializeTray());
     _syncAutostart();
     widget.traffic.start(() {
       if (!mounted) return;
@@ -51,11 +54,18 @@ class _TrafficLimitAppState extends State<TrafficLimitApp> with WindowListener {
       if (appSettings.limitsEnabled &&
           appSettings.autoPauseAtLimit &&
           widget.traffic.monthlyTotal >= appSettings.monthlyLimit * 1024) {
-        updateSettings(
-            appSettings.copyWith(limitsEnabled: false, paused: true));
+        unawaited(_setLimitsFromTray(false));
       }
     });
     if (appSettings.limitsEnabled) _restoreLimit();
+  }
+
+  Future<void> _initializeTray() async {
+    await widget.tray.initialize(
+        onEnableLimits: () => _setLimitsFromTray(true),
+        onDisableLimits: () => _setLimitsFromTray(false),
+        onQuit: _exitApp);
+    await widget.tray.setLimitsEnabled(appSettings.limitsEnabled);
   }
 
   Future<void> _restoreLimit() async {
@@ -73,8 +83,14 @@ class _TrafficLimitAppState extends State<TrafficLimitApp> with WindowListener {
 
   Future<void> _syncAutostart() async {
     final enabled = await widget.system.isAutostartEnabled();
-    if (!mounted || enabled == null || enabled == appSettings.autostart) return;
-    await updateSettings(appSettings.copyWith(autostart: enabled));
+    if (!mounted || enabled == null) return;
+    if (appSettings.autostart && enabled) {
+      await widget.system.setAutostart(true);
+      return;
+    }
+    if (enabled != appSettings.autostart) {
+      await updateSettings(appSettings.copyWith(autostart: enabled));
+    }
   }
 
   @override
@@ -96,8 +112,8 @@ class _TrafficLimitAppState extends State<TrafficLimitApp> with WindowListener {
     exit(0);
   }
 
-  Future<void> _toggleFromTray() async {
-    final enabled = !appSettings.limitsEnabled;
+  Future<void> _setLimitsFromTray(bool enabled) async {
+    if (appSettings.limitsEnabled == enabled) return;
     final applied = await widget.traffic.setLimitsEnabled(
         enabled, appSettings.downloadLimit, appSettings.uploadLimit);
     if (applied) {
@@ -106,8 +122,10 @@ class _TrafficLimitAppState extends State<TrafficLimitApp> with WindowListener {
   }
 
   Future<void> updateSettings(AppSettings value) async {
+    final changed = value.limitsEnabled != appSettings.limitsEnabled;
     setState(() => appSettings = value);
     await widget.settings.save(value);
+    if (changed) await widget.tray.setLimitsEnabled(value.limitsEnabled);
   }
 
   @override

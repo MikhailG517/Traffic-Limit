@@ -28,7 +28,7 @@ class SystemSettingsService {
               '/t',
               'REG_SZ',
               '/d',
-              '"${Platform.resolvedExecutable}"',
+              '"${Platform.resolvedExecutable}" --autostart',
               '/f'
             ])
           : await Process.run(

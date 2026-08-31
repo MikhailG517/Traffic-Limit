@@ -5,11 +5,18 @@ import 'package:window_manager/window_manager.dart';
 import '../models/traffic_models.dart';
 
 class TrayService with TrayListener {
-  Future<void> initialize(
-      {required void Function() onShow,
-      required void Function() onPause,
-      required Future<void> Function() onQuit}) async {
-    onPauseCallback = onPause;
+  bool _limitsEnabled = false;
+  Future<void> Function()? onEnableLimitsCallback;
+  Future<void> Function()? onDisableLimitsCallback;
+  Future<void> Function()? onQuitCallback;
+
+  Future<void> initialize({
+    required Future<void> Function() onEnableLimits,
+    required Future<void> Function() onDisableLimits,
+    required Future<void> Function() onQuit,
+  }) async {
+    onEnableLimitsCallback = onEnableLimits;
+    onDisableLimitsCallback = onDisableLimits;
     onQuitCallback = onQuit;
     trayManager.addListener(this);
     final base = File(Platform.resolvedExecutable).parent.path;
@@ -27,31 +34,62 @@ class TrayService with TrayListener {
     }
     await trayManager
         .setToolTip('Traffic Limit · загрузка 0 Кбит/с · отдача 0 Кбит/с');
-    await trayManager.setContextMenu(Menu(items: [
-      MenuItem(key: 'show', label: 'Открыть Traffic Limit'),
-      MenuItem.separator(),
-      MenuItem(key: 'pause', label: 'Пауза ограничений'),
-      MenuItem.separator(),
-      MenuItem(key: 'quit', label: 'Завершить приложение')
-    ]));
+    await _refreshMenu();
   }
+
+  static Menu menuFor(bool limitsEnabled) => Menu(items: [
+        MenuItem(key: 'show', label: 'Открыть Traffic Limit'),
+        MenuItem.separator(),
+        MenuItem(
+            key: 'limit-status',
+            label: limitsEnabled
+                ? 'Ограничение скорости: включено'
+                : 'Ограничение скорости: выключено',
+            disabled: true),
+        MenuItem(
+            key: 'enable-limits',
+            label: 'Включить ограничение скорости',
+            disabled: limitsEnabled),
+        MenuItem(
+            key: 'disable-limits',
+            label: 'Отключить ограничение скорости',
+            disabled: !limitsEnabled),
+        MenuItem.separator(),
+        MenuItem(key: 'quit', label: 'Завершить приложение'),
+      ]);
+
+  Future<void> setLimitsEnabled(bool enabled) async {
+    if (_limitsEnabled == enabled) return;
+    _limitsEnabled = enabled;
+    await _refreshMenu();
+  }
+
+  Future<void> _refreshMenu() =>
+      trayManager.setContextMenu(menuFor(_limitsEnabled));
 
   Future<void> update(double download, double upload,
           {required bool showSpeed}) =>
       trayManager.setToolTip(showSpeed
           ? 'Traffic Limit · ↓ ${formatRate(download)} · ↑ ${formatRate(upload)}'
           : 'Traffic Limit');
+
   @override
-  void onTrayIconMouseDown() => windowManager.show();
+  void onTrayIconMouseDown() => unawaited(windowManager.show());
+
   @override
   void onTrayMenuItemClick(MenuItem menuItem) {
-    if (menuItem.key == 'show') unawaited(windowManager.show());
-    if (menuItem.key == 'pause') onPauseCallback?.call();
-    if (menuItem.key == 'quit') unawaited(onQuitCallback?.call());
+    switch (menuItem.key) {
+      case 'show':
+        unawaited(windowManager.show());
+      case 'enable-limits':
+        unawaited(onEnableLimitsCallback?.call());
+      case 'disable-limits':
+        unawaited(onDisableLimitsCallback?.call());
+      case 'quit':
+        unawaited(onQuitCallback?.call());
+    }
   }
 
-  void Function()? onPauseCallback;
-  Future<void> Function()? onQuitCallback;
   Future<void> dispose() async {
     trayManager.removeListener(this);
     await trayManager.destroy();

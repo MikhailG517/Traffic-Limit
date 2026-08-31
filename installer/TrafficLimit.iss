@@ -35,4 +35,4 @@ Filename: "{app}\{#AppExeName}"; Description: "Запустить Traffic Limit"
 [UninstallRun]
 Filename: "{app}\TrafficLimitService.exe"; Parameters: "--uninstall"; Flags: runhidden waituntilterminated
 [Registry]
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "TrafficLimit"; ValueData: "{app}\{#AppExeName}"; Flags: uninsdeletevalue; Tasks: autostart
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "TrafficLimit"; ValueData: """{app}\{#AppExeName}"" --autostart"; Flags: uninsdeletevalue; Tasks: autostart
