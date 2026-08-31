@@ -29,7 +29,12 @@ bool TrafficService::run(){
   pipeLoop(); return true;
 }
 void TrafficService::stop(){
-  if(stopEvent_)SetEvent(stopEvent_); limiter_.stop();
+  if(stopEvent_){
+    SetEvent(stopEvent_);
+    HANDLE wake=CreateFileW(pipeName_.c_str(),GENERIC_WRITE,0,nullptr,OPEN_EXISTING,0,nullptr);
+    if(wake!=INVALID_HANDLE_VALUE){DWORD written=0;const char request[]="--stop";WriteFile(wake,request,sizeof(request)-1,&written,nullptr);CloseHandle(wake);}
+  }
+  limiter_.stop();
 #ifdef TRAFFIC_LIMIT_USE_WINDIVERT
   telemetryRunning_=false;
   driverAvailable_=false;

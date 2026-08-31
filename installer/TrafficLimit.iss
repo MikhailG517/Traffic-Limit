@@ -16,6 +16,8 @@ SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=admin
 ArchitecturesInstallIn64BitMode=x64
+CloseApplications=force
+RestartApplications=no
 SetupIconFile=..\assets\traffic_limit.ico
 UninstallDisplayIcon={app}\traffic_limit.exe
 [Files]
@@ -36,3 +38,29 @@ Filename: "{app}\{#AppExeName}"; Description: "Запустить Traffic Limit"
 Filename: "{app}\TrafficLimitService.exe"; Parameters: "--uninstall"; Flags: runhidden waituntilterminated
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "TrafficLimit"; ValueData: """{app}\{#AppExeName}"" --autostart"; Flags: uninsdeletevalue; Tasks: autostart
+[Code]
+procedure StopRunningComponents;
+var
+  ResultCode: Integer;
+begin
+  Exec(ExpandConstant('{sys}\sc.exe'), 'stop TrafficLimitService', '', SW_HIDE,
+    ewWaitUntilTerminated, ResultCode);
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM traffic_limit.exe', '',
+    SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Sleep(1500);
+  Exec(ExpandConstant('{sys}\taskkill.exe'),
+    '/F /T /IM TrafficLimitService.exe', '', SW_HIDE,
+    ewWaitUntilTerminated, ResultCode);
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  StopRunningComponents;
+  Result := '';
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usUninstall then
+    StopRunningComponents;
+end;
