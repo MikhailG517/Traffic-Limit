@@ -21,5 +21,5 @@ void PacketLimiter::stop(){running_=false;
 }
 bool PacketLimiter::available()const{return running_;}
 #ifdef TRAFFIC_LIMIT_USE_WINDIVERT
-void PacketLimiter::loop(){char packet[65535];UINT length=0;WINDIVERT_ADDRESS address{};while(running_){if(!WinDivertRecv(divertHandle,packet,sizeof(packet),&length,&address))continue;const uint64_t rate=address.Direction?download_.load():upload_.load();if(rate>0){const auto micros=(length*8ULL*1000000ULL)/rate; if(micros>0)std::this_thread::sleep_for(std::chrono::microseconds(micros));}WinDivertSend(divertHandle,packet,length,nullptr,&address);}}
+void PacketLimiter::loop(){char packet[65535];UINT length=0;WINDIVERT_ADDRESS address{};while(running_){if(!WinDivertRecv(divertHandle,packet,sizeof(packet),&length,&address))continue;const uint64_t rate=address.Outbound?upload_.load():download_.load();if(rate>0){const auto micros=(length*8ULL*1000000ULL)/rate; if(micros>0)std::this_thread::sleep_for(std::chrono::microseconds(micros));}WinDivertSend(divertHandle,packet,length,nullptr,&address);}}
 #endif
