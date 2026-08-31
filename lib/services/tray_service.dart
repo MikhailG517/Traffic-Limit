@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
@@ -6,7 +7,10 @@ import '../models/traffic_models.dart';
 class TrayService with TrayListener {
   Future<void> initialize(
       {required void Function() onShow,
-      required void Function() onPause}) async {
+      required void Function() onPause,
+      required Future<void> Function() onQuit}) async {
+    onPauseCallback = onPause;
+    onQuitCallback = onQuit;
     trayManager.addListener(this);
     final base = File(Platform.resolvedExecutable).parent.path;
     final icons = [
@@ -28,7 +32,7 @@ class TrayService with TrayListener {
       MenuItem.separator(),
       MenuItem(key: 'pause', label: 'Пауза ограничений'),
       MenuItem.separator(),
-      MenuItem(key: 'quit', label: 'Выход')
+      MenuItem(key: 'quit', label: 'Завершить приложение')
     ]));
   }
 
@@ -40,13 +44,14 @@ class TrayService with TrayListener {
   @override
   void onTrayIconMouseDown() => windowManager.show();
   @override
-  void onTrayMenuItemClick(MenuItem item) {
-    if (item.key == 'show') windowManager.show();
-    if (item.key == 'pause') onPauseCallback?.call();
-    if (item.key == 'quit') exit(0);
+  void onTrayMenuItemClick(MenuItem menuItem) {
+    if (menuItem.key == 'show') unawaited(windowManager.show());
+    if (menuItem.key == 'pause') onPauseCallback?.call();
+    if (menuItem.key == 'quit') unawaited(onQuitCallback?.call());
   }
 
   void Function()? onPauseCallback;
+  Future<void> Function()? onQuitCallback;
   Future<void> dispose() async {
     trayManager.removeListener(this);
     await trayManager.destroy();

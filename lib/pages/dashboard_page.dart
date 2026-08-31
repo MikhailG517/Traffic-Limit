@@ -1,21 +1,13 @@
 import 'package:flutter/material.dart';
 import '../models/traffic_models.dart';
-import '../services/settings_service.dart';
 import '../services/traffic_service.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 
 class DashboardPage extends StatelessWidget {
-  const DashboardPage(
-      {super.key,
-      required this.stats,
-      required this.service,
-      required this.settings,
-      required this.onSettingsChanged});
+  const DashboardPage({super.key, required this.stats, required this.service});
   final TrafficStats stats;
   final TrafficService service;
-  final AppSettings settings;
-  final ValueChanged<AppSettings> onSettingsChanged;
   @override
   Widget build(BuildContext context) => PageShell(
       title: 'Трафик в реальном времени',

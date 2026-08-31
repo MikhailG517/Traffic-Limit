@@ -21,12 +21,14 @@ class TrafficService {
   double _downloadTotal = 0;
   double _uploadTotal = 0;
   double _monthlyTotal = 0;
-  String get _monthKey => '${DateTime.now().year}-${DateTime.now().month}';
+  static const _dataVersion = 3;
+  static const _maxPlanRateKbit = 500000.0;
   double get monthlyTotal => _monthlyTotal;
   double get todayTotal => _periodTotal(const Duration(days: 1));
   double get weekTotal => _periodTotal(const Duration(days: 7));
   double get monthTotal => _monthlyTotal;
   final Map<String, double> _dailyTotals = {};
+  DateTime? _lastHistorySave;
   String _dayKey(DateTime value) =>
       '${value.year}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
   double _periodTotal(Duration period) {
@@ -41,17 +43,39 @@ class TrafficService {
     });
   }
 
-  void start(void Function() onUpdate) {
-    if (_preferences.getString('trafficMonth') != _monthKey) {
-      _preferences.setString('trafficMonth', _monthKey);
-      _preferences.setDouble('monthlyTotal', 0);
+  Future<void> start(void Function() onUpdate) async {
+    if ((_preferences.getInt('trafficDataVersion') ?? 0) != _dataVersion) {
+      await _preferences.remove('dailyTotals');
+      await _preferences.remove('trafficSamples');
+      await _preferences.remove('monthlyTotal');
+      await _preferences.remove('sessionDownload');
+      await _preferences.remove('sessionUpload');
+      await _preferences.setInt('trafficDataVersion', _dataVersion);
     }
-    _monthlyTotal = _preferences.getDouble('monthlyTotal') ?? 0;
     final encoded = _preferences.getString('dailyTotals');
     if (encoded != null) {
       for (final entry
           in (jsonDecode(encoded) as Map<String, dynamic>).entries) {
         _dailyTotals[entry.key] = (entry.value as num).toDouble();
+      }
+    }
+    _monthlyTotal = _dailyTotals.entries
+        .where((entry) => entry.key.startsWith(
+            '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}'))
+        .fold<double>(0, (sum, entry) => sum + entry.value);
+    _downloadTotal = _preferences.getDouble('sessionDownload') ?? 0;
+    _uploadTotal = _preferences.getDouble('sessionUpload') ?? 0;
+    await _preferences.setDouble('monthlyTotal', _monthlyTotal);
+    final savedSamples = _preferences.getString('trafficSamples');
+    if (savedSamples != null) {
+      try {
+        samples.addAll((jsonDecode(savedSamples) as List<dynamic>).map((item) =>
+            TrafficSample(
+                time: DateTime.parse(item['time'] as String),
+                download: (item['download'] as num).toDouble(),
+                upload: (item['upload'] as num).toDouble())));
+      } catch (_) {
+        await _logger.error('Не удалось восстановить историю графиков');
       }
     }
     _logger.info('Запуск мониторинга сетевых интерфейсов');
@@ -72,7 +96,7 @@ class TrafficService {
       final double down = actual == null || _previous == null
           ? 0
           : min(
-                  actual.linkKbit,
+                  _maxPlanRateKbit,
                   max(
                       0,
                       (actual.received - _previous!.received) *
@@ -82,7 +106,7 @@ class TrafficService {
               .toDouble();
       final double up = actual == null || _previous == null
           ? 0
-          : min(actual.linkKbit,
+          : min(_maxPlanRateKbit,
                   max(0, (actual.sent - _previous!.sent) * 8 / seconds / 1000))
               .toDouble();
       if (actual != null) {
@@ -91,6 +115,8 @@ class TrafficService {
           final sentDelta = max(0, actual.sent - _previous!.sent);
           _downloadTotal += receivedDelta / 1024 / 1024;
           _uploadTotal += sentDelta / 1024 / 1024;
+          await _preferences.setDouble('sessionDownload', _downloadTotal);
+          await _preferences.setDouble('sessionUpload', _uploadTotal);
           final deltaMb = (receivedDelta + sentDelta) / 1024 / 1024;
           _monthlyTotal += deltaMb;
           final key = _dayKey(DateTime.now());
@@ -109,9 +135,21 @@ class TrafficService {
           status: actual == null && !Platform.isWindows
               ? TrafficStatus.unavailable
               : TrafficStatus.active);
-      samples
-          .add(TrafficSample(time: DateTime.now(), download: down, upload: up));
+      samples.add(TrafficSample(time: now, download: down, upload: up));
       if (samples.length > 525600) samples.removeAt(0);
+      if (_lastHistorySave == null ||
+          now.difference(_lastHistorySave!).inSeconds >= 10) {
+        _lastHistorySave = now;
+        await _preferences.setString(
+            'trafficSamples',
+            jsonEncode(samples
+                .map((item) => {
+                      'time': item.time.toIso8601String(),
+                      'download': item.download,
+                      'upload': item.upload
+                    })
+                .toList()));
+      }
       interfaces
         ..clear()
         ..add(NetworkInterfaceInfo(
@@ -188,7 +226,7 @@ class TrafficService {
   Future<TrafficTotals?> _readWindowsTotals() async {
     try {
       const script =
-          r"$a=Get-NetAdapter -Physical | Where-Object Status -eq 'Up'; $s=$a | Get-NetAdapterStatistics -ErrorAction Stop; [Console]::WriteLine((($s | Measure-Object ReceivedBytes -Sum).Sum)); [Console]::WriteLine((($s | Measure-Object SentBytes -Sum).Sum)); [Console]::WriteLine((($a | Measure-Object LinkSpeed -Maximum).Maximum))";
+          r'''$a=Get-NetAdapter -Physical | Where-Object Status -eq 'Up'; $s=$a | Get-NetAdapterStatistics -ErrorAction Stop; $rx=[UInt64](($s | Measure-Object ReceivedBytes -Sum).Sum); $tx=[UInt64](($s | Measure-Object SentBytes -Sum).Sum); Write-Output ("RX=$rx"); Write-Output ("TX=$tx")''';
       final result = await Process.run('powershell.exe',
           ['-NoProfile', '-NonInteractive', '-Command', script]);
       final lines = result.stdout
@@ -197,11 +235,15 @@ class TrafficService {
           .split(RegExp(r'\s+'))
           .where((e) => e.isNotEmpty)
           .toList();
-      if (result.exitCode != 0 || lines.length < 3) return null;
-      return TrafficTotals(
-          received: int.tryParse(lines[0]) ?? 0,
-          sent: int.tryParse(lines[1]) ?? 0,
-          linkKbit: max(1, (int.tryParse(lines[2]) ?? 0) / 1000).toDouble());
+      if (result.exitCode != 0 || lines.length < 2) return null;
+      final received = int.tryParse(lines
+          .firstWhere((line) => line.startsWith('RX='), orElse: () => 'RX=0')
+          .substring(3));
+      final sent = int.tryParse(lines
+          .firstWhere((line) => line.startsWith('TX='), orElse: () => 'TX=0')
+          .substring(3));
+      if (received == null || sent == null) return null;
+      return TrafficTotals(received: received, sent: sent, linkKbit: 500000);
     } catch (_) {
       await _logger.error('Не удалось прочитать счётчики Windows');
       return null;
@@ -235,7 +277,12 @@ class TrafficService {
     _downloadTotal = 0;
     _uploadTotal = 0;
     _monthlyTotal = 0;
+    _dailyTotals.clear();
     _preferences.setDouble('monthlyTotal', 0);
+    _preferences.remove('sessionDownload');
+    _preferences.remove('sessionUpload');
+    _preferences.remove('dailyTotals');
+    _preferences.remove('trafficSamples');
     stats = const TrafficStats();
     _logger.info('Статистика сброшена пользователем');
   }

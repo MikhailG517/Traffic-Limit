@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
@@ -24,7 +25,14 @@ Future<void> main() async {
   final preferences = await SharedPreferences.getInstance();
   final logger = LoggerService();
   final tray = TrayService();
-  await tray.initialize(onShow: windowManager.show, onPause: () {});
+  await tray.initialize(
+      onShow: windowManager.show,
+      onPause: () {},
+      onQuit: () async {
+        await tray.dispose();
+        await windowManager.destroy();
+        exit(0);
+      });
   runApp(TrafficLimitApp(
       settings: SettingsService(preferences),
       logger: logger,

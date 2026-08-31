@@ -115,11 +115,7 @@ class _TrafficLimitAppState extends State<TrafficLimitApp> with WindowListener {
             onChanged: updateSettings,
             system: widget.system);
       default:
-        return DashboardPage(
-            stats: stats,
-            service: widget.traffic,
-            settings: appSettings,
-            onSettingsChanged: updateSettings);
+        return DashboardPage(stats: stats, service: widget.traffic);
     }
   }
 }
