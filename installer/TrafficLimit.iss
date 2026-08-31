@@ -24,7 +24,7 @@ UninstallDisplayIcon={app}\traffic_limit.exe
 Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\build\native\TrafficLimitService.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\build\native\WinDivert.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\build\native\WinDivert64.sys"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\build\native\WinDivert64.sys"; DestDir: "{app}"; Flags: ignoreversion onlyifdoesntexist
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
@@ -51,6 +51,11 @@ begin
   Exec(ExpandConstant('{sys}\taskkill.exe'),
     '/F /T /IM TrafficLimitService.exe', '', SW_HIDE,
     ewWaitUntilTerminated, ResultCode);
+  Exec(ExpandConstant('{sys}\sc.exe'), 'stop WinDivert', '', SW_HIDE,
+    ewWaitUntilTerminated, ResultCode);
+  Exec(ExpandConstant('{sys}\sc.exe'), 'delete WinDivert', '', SW_HIDE,
+    ewWaitUntilTerminated, ResultCode);
+  Sleep(1000);
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
