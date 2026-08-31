@@ -22,7 +22,7 @@ flutter build windows --release
 
 ## WinDivert
 
-Официальный WinDivert 2.2.2 x64 уже включён в исходники и установщик. Для обновления runtime замените SDK в в `windows/native/TrafficLimitService/third_party/WinDivert/`:
+Официальный WinDivert 2.2.2 x64 уже включён в исходники и установщик. При старте службы библиотека автоматически загружает driver из каталога приложения. Для обновления runtime замените SDK в в `windows/native/TrafficLimitService/third_party/WinDivert/`:
 
 ```text
 third_party/WinDivert/include/WinDivert.h
