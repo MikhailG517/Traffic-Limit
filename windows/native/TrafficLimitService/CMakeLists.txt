@@ -6,7 +6,7 @@ if(NOT EXISTS "${WINDIVERT_ROOT}/include/windivert.h" OR NOT EXISTS "${WINDIVERT
 endif()
 set(CMAKE_CXX_STANDARD 20)
 add_executable(TrafficLimitService WIN32 main.cpp service.cpp traffic_counter.cpp limiter.cpp process_stats.cpp)
-target_compile_definitions(TrafficLimitService PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0601 NTDDI_VERSION=0x06010000 TRAFFIC_LIMIT_USE_WINDIVERT)
+target_compile_definitions(TrafficLimitService PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0602 NTDDI_VERSION=0x06020000 TRAFFIC_LIMIT_USE_WINDIVERT)
 target_include_directories(TrafficLimitService PRIVATE "${WINDIVERT_ROOT}/include")
 target_link_directories(TrafficLimitService PRIVATE "${WINDIVERT_ROOT}/x64")
 target_link_libraries(TrafficLimitService PRIVATE iphlpapi advapi32 userenv ws2_32 WinDivert)
