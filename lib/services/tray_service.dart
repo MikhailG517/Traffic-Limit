@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 import '../models/traffic_models.dart';
@@ -19,19 +18,10 @@ class TrayService with TrayListener {
     onDisableLimitsCallback = onDisableLimits;
     onQuitCallback = onQuit;
     trayManager.addListener(this);
-    final base = File(Platform.resolvedExecutable).parent.path;
-    final icons = [
-      File(
-          '$base${Platform.pathSeparator}data${Platform.pathSeparator}flutter_assets${Platform.pathSeparator}assets${Platform.pathSeparator}traffic_limit.ico'),
-      File(
-          '$base${Platform.pathSeparator}data${Platform.pathSeparator}flutter_assets${Platform.pathSeparator}assets${Platform.pathSeparator}traffic_limit.png'),
-    ];
-    for (final icon in icons) {
-      if (icon.existsSync()) {
-        await trayManager.setIcon(icon.path);
-        break;
-      }
-    }
+    // tray_manager resolves this relative asset to data/flutter_assets itself.
+    // Passing an absolute path makes older Windows plugin versions build an
+    // invalid nested path and leaves the tray icon invisible.
+    await trayManager.setIcon('assets/traffic_limit.ico');
     await trayManager
         .setToolTip('Traffic Limit · загрузка 0 Кбит/с · отдача 0 Кбит/с');
     await _refreshMenu();
@@ -75,6 +65,9 @@ class TrayService with TrayListener {
 
   @override
   void onTrayIconMouseDown() => unawaited(windowManager.show());
+
+  @override
+  void onTrayIconRightMouseDown() => unawaited(trayManager.popUpContextMenu());
 
   @override
   void onTrayMenuItemClick(MenuItem menuItem) {

@@ -15,11 +15,13 @@ struct ProcessCounters {
 class ProcessStats {
  public:
   void bind(const std::string& key, uint32_t processId);
-  void add(const std::string& key, bool outbound, uint64_t bytes);
+  void bindLocal(uint8_t protocol, uint16_t port, uint32_t processId);
+  void add(const std::string& key, uint8_t protocol, uint16_t localPort, bool outbound, uint64_t bytes);
   std::string json();
  private:
   std::mutex mutex_;
   std::unordered_map<std::string, uint32_t> owners_;
+  std::unordered_map<uint32_t, uint32_t> localOwners_;
   std::unordered_map<uint32_t, ProcessCounters> counters_;
   std::chrono::steady_clock::time_point previous_ = std::chrono::steady_clock::now();
 };

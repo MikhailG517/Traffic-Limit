@@ -4,6 +4,7 @@ import 'dart:math';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/traffic_models.dart';
+import 'rate_math.dart';
 import 'logger_service.dart';
 
 class TrafficService {
@@ -22,7 +23,6 @@ class TrafficService {
   double _uploadTotal = 0;
   double _monthlyTotal = 0;
   static const _dataVersion = 3;
-  static const _maxPlanRateKbit = 500000.0;
   double get monthlyTotal => _monthlyTotal;
   double get todayTotal => _periodTotal(const Duration(days: 1));
   double get weekTotal => _periodTotal(const Duration(days: 7));
@@ -93,25 +93,21 @@ class TrafficService {
     try {
       final now = DateTime.now();
       final actual = Platform.isWindows ? await _readWindowsTotals() : null;
-      final seconds = _previousAt == null
-          ? 1.0
-          : max(0.25, now.difference(_previousAt!).inMilliseconds / 1000);
+      final elapsed = _previousAt == null
+          ? const Duration(seconds: 1)
+          : now.difference(_previousAt!);
       final double down = actual == null || _previous == null
           ? 0
-          : min(
-                  _maxPlanRateKbit,
-                  max(
-                      0,
-                      (actual.received - _previous!.received) *
-                          8 /
-                          seconds /
-                          1000))
-              .toDouble();
+          : rateKbit(
+              currentBytes: actual.received,
+              previousBytes: _previous!.received,
+              elapsed: elapsed);
       final double up = actual == null || _previous == null
           ? 0
-          : min(_maxPlanRateKbit,
-                  max(0, (actual.sent - _previous!.sent) * 8 / seconds / 1000))
-              .toDouble();
+          : rateKbit(
+              currentBytes: actual.sent,
+              previousBytes: _previous!.sent,
+              elapsed: elapsed);
       if (actual != null) {
         if (_previous != null) {
           final receivedDelta = max(0, actual.received - _previous!.received);
