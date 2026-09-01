@@ -52,30 +52,38 @@ class ApplicationsPage extends StatelessWidget {
             ])),
         Expanded(
             child: _metric(
-                '↓ Загрузка', formatRate(process.download), AppColors.green)),
+                '↓ Загрузка',
+                process.hasByteCounters
+                    ? formatRate(process.download)
+                    : 'нет данных',
+                AppColors.green)),
         Expanded(
-            child:
-                _metric('↑ Отдача', formatRate(process.upload), AppColors.red)),
+            child: _metric(
+                '↑ Отдача',
+                process.hasByteCounters
+                    ? formatRate(process.upload)
+                    : 'нет данных',
+                AppColors.red)),
         Expanded(
             child: _metric(
                 'Входящий',
                 process.hasByteCounters
                     ? formatData(process.downloadTotal)
-                    : '0 МБ',
+                    : 'нет данных',
                 AppColors.green)),
         Expanded(
             child: _metric(
                 'Исходящий',
                 process.hasByteCounters
                     ? formatData(process.uploadTotal)
-                    : '0 МБ',
+                    : 'нет данных',
                 AppColors.red)),
         Expanded(
             child: _metric(
                 'Всего',
                 process.hasByteCounters
                     ? formatData(process.downloadTotal + process.uploadTotal)
-                    : '0 МБ',
+                    : 'нет данных',
                 AppColors.text))
       ]));
   Widget _metric(String label, String value, Color color) =>

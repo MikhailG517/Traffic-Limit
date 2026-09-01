@@ -47,7 +47,7 @@ std::string TrafficService::processJson(){return processStats_.json();}
 bool TrafficService::driverAvailable() const { return driverAvailable_; }
 #ifdef TRAFFIC_LIMIT_USE_WINDIVERT
 void TrafficService::flowLoop(){
-  WINDIVERT_ADDRESS address{}; while(telemetryRunning_){ if(!WinDivertRecv(flowHandle_,nullptr,0,nullptr,&address))continue; if(address.Event!=WINDIVERT_EVENT_FLOW_ESTABLISHED)continue; const auto& f=address.Flow; const auto key=flowKey(f.LocalAddr,f.RemoteAddr,ntohs(f.LocalPort),ntohs(f.RemotePort),f.Protocol); const auto reverse=flowKey(f.RemoteAddr,f.LocalAddr,ntohs(f.RemotePort),ntohs(f.LocalPort),f.Protocol); processStats_.bind(key,f.ProcessId); processStats_.bind(reverse,f.ProcessId); }
+  WINDIVERT_ADDRESS address{}; while(telemetryRunning_){ if(!WinDivertRecv(flowHandle_,nullptr,0,nullptr,&address))continue; if(address.Event!=WINDIVERT_EVENT_FLOW_ESTABLISHED)continue; const auto& f=address.Flow; const auto key=flowKey(f.LocalAddr,f.RemoteAddr,f.LocalPort,f.RemotePort,f.Protocol); const auto reverse=flowKey(f.RemoteAddr,f.LocalAddr,f.RemotePort,f.LocalPort,f.Protocol); processStats_.bind(key,f.ProcessId); processStats_.bind(reverse,f.ProcessId); }
 }
 void TrafficService::refreshConnections(){
   DWORD size=0; if(GetExtendedTcpTable(nullptr,&size,FALSE,AF_INET,TCP_TABLE_OWNER_PID_ALL,0)!=ERROR_INSUFFICIENT_BUFFER)return;
