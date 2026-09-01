@@ -16,5 +16,29 @@ static bool InstallService(){
   CloseServiceHandle(service); CloseServiceHandle(manager); return started;
 }
 static bool UninstallService(){SC_HANDLE manager=OpenSCManagerW(nullptr,nullptr,SC_MANAGER_CONNECT);if(!manager)return false;SC_HANDLE service=OpenServiceW(manager,L"TrafficLimitService",DELETE|SERVICE_STOP);if(!service){CloseServiceHandle(manager);return true;}SERVICE_STATUS status{};ControlService(service,SERVICE_CONTROL_STOP,&status);const bool ok=DeleteService(service);CloseServiceHandle(service);CloseServiceHandle(manager);return ok;}
-static int SendLimit(const std::wstring& args){HANDLE pipe=CreateFileW(LR"(\\.\pipe\TrafficLimit)",GENERIC_READ|GENERIC_WRITE,0,nullptr,OPEN_EXISTING,0,nullptr);if(pipe==INVALID_HANDLE_VALUE)return 1;const int size=WideCharToMultiByte(CP_UTF8,0,args.data(),static_cast<int>(args.size()),nullptr,0,nullptr,nullptr);std::string payload(size,'\0');if(size>0)WideCharToMultiByte(CP_UTF8,0,args.data(),static_cast<int>(args.size()),payload.data(),size,nullptr,nullptr); DWORD written=0;WriteFile(pipe,payload.data(),(DWORD)payload.size(),&written,nullptr);char response[512]{};DWORD read=0;ReadFile(pipe,response,sizeof(response)-1,&read,nullptr);response[read]=0;DWORD out=0;WriteFile(GetStdHandle(STD_OUTPUT_HANDLE),response,read,&out,nullptr);CloseHandle(pipe);return 0;}
+static std::wstring ArgValue(const std::wstring& args, const wchar_t* token){
+  const auto pos=args.find(token); if(pos==std::wstring::npos)return L"";
+  std::wstring value=args.substr(pos+wcslen(token));
+  if(!value.empty() && value.front()==L'\"') value.erase(value.begin());
+  const auto end=value.find(L'\"'); if(end!=std::wstring::npos)value.resize(end);
+  return value;
+}
+static int SendLimit(const std::wstring& args){
+  HANDLE pipe=CreateFileW(LR"(\\.\\pipe\\TrafficLimit)",GENERIC_READ|GENERIC_WRITE,0,nullptr,OPEN_EXISTING,0,nullptr);
+  if(pipe==INVALID_HANDLE_VALUE)return 1;
+  const int size=WideCharToMultiByte(CP_UTF8,0,args.data(),static_cast<int>(args.size()),nullptr,0,nullptr,nullptr);
+  std::string payload(size,'\0'); if(size>0)WideCharToMultiByte(CP_UTF8,0,args.data(),static_cast<int>(args.size()),payload.data(),size,nullptr,nullptr);
+  DWORD written=0; WriteFile(pipe,payload.data(),(DWORD)payload.size(),&written,nullptr);
+  constexpr DWORD kBuf=256*1024;
+  std::string response(kBuf,'\0'); DWORD read=0;
+  ReadFile(pipe,response.data(),kBuf-1,&read,nullptr); response[read]=0;
+  const auto outPath=ArgValue(args,L"--out=");
+  if(!outPath.empty()){
+    FILE* f=nullptr; _wfopen_s(&f,outPath.c_str(),L"wb");
+    if(f){ if(read>0)fwrite(response.data(),1,read,f); fclose(f); }
+  }else{
+    DWORD out=0; WriteFile(GetStdHandle(STD_OUTPUT_HANDLE),response.data(),read,&out,nullptr);
+  }
+  CloseHandle(pipe); return 0;
+}
 int WINAPI wWinMain(HINSTANCE,HINSTANCE,PWSTR command,int){std::wstring args=command?command:L"";if(args.find(L"--install")!=std::wstring::npos)return InstallService()?0:1;if(args.find(L"--uninstall")!=std::wstring::npos)return UninstallService()?0:1;if(args.find(L"--set-limit")!=std::wstring::npos||args.find(L"--get-processes")!=std::wstring::npos||args.find(L"--get-status")!=std::wstring::npos||args.find(L"--disable")!=std::wstring::npos)return SendLimit(args);SERVICE_TABLE_ENTRYW table[]={{const_cast<LPWSTR>(L"TrafficLimitService"),ServiceMain},{nullptr,nullptr}};return StartServiceCtrlDispatcherW(table)?0:1;}

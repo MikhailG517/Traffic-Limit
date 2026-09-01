@@ -27,6 +27,8 @@ Future<void> main() async {
     if (launch.showWindow) {
       await windowManager.show();
       await windowManager.focus();
+    } else {
+      await windowManager.hide();
     }
   });
   await windowManager.setPreventClose(true);

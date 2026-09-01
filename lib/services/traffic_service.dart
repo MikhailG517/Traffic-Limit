@@ -35,19 +35,39 @@ class TrafficService {
   String get _servicePath =>
       '${File(Platform.resolvedExecutable).parent.path}${Platform.pathSeparator}TrafficLimitService.exe';
 
+  Future<String?> _nativeResponse(String command) async {
+    if (!Platform.isWindows) return null;
+    final service = File(_servicePath);
+    if (!service.existsSync()) return null;
+    final tmp = File(
+        '${Directory.systemTemp.path}${Platform.pathSeparator}tl-resp-${DateTime.now().microsecondsSinceEpoch}.json');
+    try {
+      final result =
+          await Process.run(service.path, [command, '--out=${tmp.path}']);
+      if (result.exitCode != 0 || !tmp.existsSync()) return null;
+      return await tmp.readAsString();
+    } catch (_) {
+      return null;
+    } finally {
+      try {
+        if (tmp.existsSync()) tmp.delete();
+      } catch (_) {}
+    }
+  }
+
   Future<String> nativeTelemetryStatus() async {
     if (!Platform.isWindows) return 'Только для Windows';
     final service = File(_servicePath);
     if (!service.existsSync()) return 'Служба не найдена';
     try {
-      final result = await Process.run(service.path, ['--get-status']);
-      if (result.exitCode != 0) return 'Служба не отвечает';
-      final status = Map<String, dynamic>.from(
-          jsonDecode(result.stdout.toString()) as Map);
+      final text = await _nativeResponse('--get-status');
+      if (text == null) return 'Служба не отвечает';
+      final status = Map<String, dynamic>.from(jsonDecode(text) as Map);
       final driver = status['driver'] == true;
       if (!driver) return 'Драйвер WinDivert недоступен';
       return 'Активно';
-    } catch (_) {
+    } catch (e) {
+      await _logger.error('Ошибка опроса статуса службы', error: e);
       return 'Ошибка опроса';
     }
   }
@@ -197,6 +217,11 @@ class TrafficService {
       processes
         ..clear()
         ..addAll(await _readWindowsProcesses());
+      await _logger.debug('Обновление показателей', params: {
+        'down_kbit': down.round(),
+        'up_kbit': up.round(),
+        'processes': processes.length
+      });
       onUpdate();
     } finally {
       _busy = false;
@@ -242,18 +267,30 @@ class TrafficService {
 
   Future<Map<int, Map<String, dynamic>>> _readProcessCounters() async {
     final service = File(_servicePath);
-    if (!service.existsSync()) return {};
+    if (!service.existsSync()) {
+      await _logger.warn('Служба не найдена', params: {'path': _servicePath});
+      return {};
+    }
     try {
-      final result = await Process.run(service.path, ['--get-processes']);
-      if (result.exitCode != 0 || result.stdout.toString().trim().isEmpty) {
+      var text = await _nativeResponse('--get-processes');
+      if (text == null || text.isEmpty) {
+        await ensureService();
+        text = await _nativeResponse('--get-processes');
+      }
+      if (text == null || text.isEmpty) {
+        await _logger.warn('Служба не вернула данные по процессам');
         return {};
       }
-      final decoded = jsonDecode(result.stdout.toString()) as List<dynamic>;
+      final decoded = jsonDecode(text) as List<dynamic>;
+      await _logger.debug('Получены счётчики процессов',
+          params: {'pids': decoded.length});
       return {
         for (final item in decoded)
           (item['pid'] as num).toInt(): Map<String, dynamic>.from(item as Map)
       };
-    } catch (_) {
+    } catch (e, st) {
+      await _logger.error('Ошибка чтения счётчиков процессов',
+          error: e, stack: st);
       return {};
     }
   }
@@ -365,13 +402,12 @@ class TrafficService {
     if (!Platform.isWindows) return false;
     final service = File(_servicePath);
     if (!service.existsSync()) return false;
-    final result = await Process.run(service.path, [
-      '--set-limit',
-      '--download=${mbpsToBitsPerSecond(download)}',
-      '--upload=${mbpsToBitsPerSecond(upload)}'
-    ]);
-    return result.exitCode == 0 &&
-        result.stdout.toString().contains('"limiter":true');
+    final text = await _nativeResponse(
+        '--set-limit --download=${mbpsToBitsPerSecond(download)} --upload=${mbpsToBitsPerSecond(upload)}');
+    final ok = text != null && text.contains('"limiter":true');
+    await _logger.info('Результат применения ограничения',
+        params: {'ok': ok, 'response': text});
+    return ok;
   }
 }
 
