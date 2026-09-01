@@ -250,6 +250,18 @@ class TrafficService {
     }
   }
 
+  double peakFor(HistoryPeriod period, {required bool download}) =>
+      peakFromSamples(samplesFor(period), download: download);
+
+  static double peakFromSamples(List<TrafficSample> points,
+      {required bool download}) {
+    if (points.isEmpty) return 0;
+    return points.fold<double>(
+        0,
+        (peak, sample) =>
+            max(peak, download ? sample.download : sample.upload));
+  }
+
   List<TrafficSample> samplesFor(HistoryPeriod period) {
     final window = switch (period) {
       HistoryPeriod.hour => const Duration(hours: 1),

@@ -18,7 +18,9 @@ Future<void> main() async {
       size: Size(1280, 820),
       minimumSize: Size(980, 680),
       center: true,
-      title: 'Traffic Limit');
+      title: 'Traffic Limit',
+      titleBarStyle: TitleBarStyle.hidden,
+      windowButtonVisibility: false);
   await windowManager.waitUntilReadyToShow(options, () async {
     if (!launch.startHidden) {
       await windowManager.show();

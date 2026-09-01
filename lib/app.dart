@@ -138,13 +138,17 @@ class _TrafficLimitAppState extends State<TrafficLimitApp> with WindowListener {
           appSettings.themeMode == 'light' ? ThemeMode.light : ThemeMode.dark,
       home: Scaffold(
           body: SafeArea(
-              child: Row(children: [
-        NavigationRailPanel(
-            selected: selected,
-            used: widget.traffic.monthlyTotal,
-            monthlyLimit: appSettings.monthlyLimit,
-            onSelected: (value) => setState(() => selected = value)),
-        Expanded(child: _page())
+              child: Column(children: [
+        const WindowTitleBar(),
+        Expanded(
+            child: Row(children: [
+          NavigationRailPanel(
+              selected: selected,
+              used: widget.traffic.monthlyTotal,
+              monthlyLimit: appSettings.monthlyLimit,
+              onSelected: (value) => setState(() => selected = value)),
+          Expanded(child: _page())
+        ]))
       ]))));
   Widget _page() {
     switch (selected) {
@@ -169,6 +173,78 @@ class _TrafficLimitAppState extends State<TrafficLimitApp> with WindowListener {
   }
 }
 
+class WindowTitleBar extends StatefulWidget {
+  const WindowTitleBar({super.key});
+
+  @override
+  State<WindowTitleBar> createState() => _WindowTitleBarState();
+}
+
+class _WindowTitleBarState extends State<WindowTitleBar> {
+  bool maximized = false;
+
+  Future<void> _toggleMaximize() async {
+    maximized = await windowManager.isMaximized();
+    if (maximized) {
+      await windowManager.unmaximize();
+    } else {
+      await windowManager.maximize();
+    }
+    if (mounted) setState(() => maximized = !maximized);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return SizedBox(
+        height: 42,
+        child: Row(children: [
+          const SizedBox(width: 16),
+          Container(
+              width: 10,
+              height: 10,
+              decoration: const BoxDecoration(
+                  color: AppColors.blue, shape: BoxShape.circle)),
+          const SizedBox(width: 10),
+          Text('Traffic Limit',
+              style: TextStyle(
+                  color: scheme.onSurface, fontWeight: FontWeight.w700)),
+          Expanded(
+              child: GestureDetector(
+                  onDoubleTap: _toggleMaximize,
+                  onPanStart: (_) => windowManager.startDragging(),
+                  child: const SizedBox.expand())),
+          _WindowButton(icon: Icons.remove, onPressed: windowManager.minimize),
+          _WindowButton(
+              icon: maximized ? Icons.filter_none : Icons.crop_square,
+              onPressed: _toggleMaximize),
+          _WindowButton(
+              icon: Icons.close,
+              onPressed: windowManager.hide,
+              hoverColor: Colors.red),
+          const SizedBox(width: 8)
+        ]));
+  }
+}
+
+class _WindowButton extends StatelessWidget {
+  const _WindowButton(
+      {required this.icon, required this.onPressed, this.hoverColor});
+  final IconData icon;
+  final Future<void> Function() onPressed;
+  final Color? hoverColor;
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+      splashRadius: 18,
+      tooltip: icon == Icons.close ? 'Скрыть' : 'Управление окном',
+      onPressed: onPressed,
+      icon: Icon(icon, size: 16),
+      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .62),
+      hoverColor: (hoverColor ?? Theme.of(context).colorScheme.primary)
+          .withValues(alpha: .16));
+}
+
 class NavigationRailPanel extends StatelessWidget {
   const NavigationRailPanel(
       {super.key,
@@ -180,33 +256,37 @@ class NavigationRailPanel extends StatelessWidget {
   final double used, monthlyLimit;
   final ValueChanged<int> onSelected;
   @override
-  Widget build(BuildContext context) => Container(
-      width: 242,
-      color: AppColors.panel,
-      padding: const EdgeInsets.fromLTRB(14, 20, 14, 16),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Container(
-              width: 12,
-              height: 12,
-              decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppColors.blue,
-                  boxShadow: [
-                    BoxShadow(color: AppColors.blue, blurRadius: 12)
-                  ])),
-          const SizedBox(width: 12),
-          const Text('Traffic Limit',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700))
-        ]),
-        const SizedBox(height: 42),
-        ...['Обзор', 'Графики', 'Приложения', 'Ограничения', 'Настройки']
-            .asMap()
-            .entries
-            .map((entry) => _item(context, entry.key, entry.value)),
-        const Spacer(),
-        MonthlyUsage(used: used, limit: monthlyLimit),
-      ]));
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+        width: 242,
+        color: scheme.surface,
+        padding: const EdgeInsets.fromLTRB(14, 20, 14, 16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Container(
+                width: 12,
+                height: 12,
+                decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.blue,
+                    boxShadow: [
+                      BoxShadow(color: AppColors.blue, blurRadius: 12)
+                    ])),
+            const SizedBox(width: 12),
+            const Text('Traffic Limit',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700))
+          ]),
+          const SizedBox(height: 42),
+          ...['Обзор', 'Графики', 'Приложения', 'Ограничения', 'Настройки']
+              .asMap()
+              .entries
+              .map((entry) => _item(context, entry.key, entry.value)),
+          const Spacer(),
+          MonthlyUsage(used: used, limit: monthlyLimit),
+        ]));
+  }
+
   Widget _item(BuildContext context, int index, String label) => InkWell(
       onTap: () => onSelected(index),
       borderRadius: BorderRadius.circular(12),
@@ -215,8 +295,9 @@ class NavigationRailPanel extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-              color:
-                  selected == index ? AppColors.selected : Colors.transparent,
+              color: selected == index
+                  ? Theme.of(context).colorScheme.primaryContainer
+                  : Colors.transparent,
               borderRadius: BorderRadius.circular(12),
               border: selected == index
                   ? const Border(
@@ -232,11 +313,21 @@ class NavigationRailPanel extends StatelessWidget {
                   Icons.tune_rounded
                 ][index],
                 size: 19,
-                color: selected == index ? AppColors.cyan : AppColors.muted),
+                color: selected == index
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: .58)),
             const SizedBox(width: 14),
             Text(label,
                 style: TextStyle(
-                    color: selected == index ? Colors.white : AppColors.muted,
+                    color: selected == index
+                        ? Theme.of(context).colorScheme.onPrimaryContainer
+                        : Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withValues(alpha: .68),
                     fontWeight:
                         selected == index ? FontWeight.w700 : FontWeight.w500))
           ])));
@@ -252,8 +343,8 @@ class MonthlyUsage extends StatelessWidget {
     return Container(
         padding: const EdgeInsets.all(15),
         decoration: BoxDecoration(
-            color: AppColors.card,
-            border: Border.all(color: AppColors.border),
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            border: Border.all(color: Theme.of(context).dividerColor),
             borderRadius: BorderRadius.circular(14)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Text('ЛИМИТ МЕСЯЦА',
@@ -265,13 +356,14 @@ class MonthlyUsage extends StatelessWidget {
           LinearProgressIndicator(
               value: progress,
               minHeight: 6,
-              backgroundColor: const Color(0xff29303d),
+              backgroundColor: Theme.of(context).dividerColor,
               valueColor: const AlwaysStoppedAnimation(AppColors.cyan)),
           const SizedBox(height: 11),
           Text.rich(TextSpan(
               text: formatData(used),
-              style: const TextStyle(
-                  color: Colors.white, fontWeight: FontWeight.w700),
+              style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurface,
+                  fontWeight: FontWeight.w700),
               children: [
                 TextSpan(
                     text: ' из ${limit.toStringAsFixed(0)} ГБ',

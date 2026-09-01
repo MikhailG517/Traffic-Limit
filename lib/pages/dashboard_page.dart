@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart';
 import '../models/traffic_models.dart';
 import '../services/traffic_service.dart';
 import '../theme.dart';
@@ -16,6 +17,7 @@ class DashboardPage extends StatelessWidget {
         Row(children: [
           Expanded(
               child: _trafficCard(
+                  context,
                   'ЗАГРУЗКА',
                   formatRate(stats.downloadRate),
                   AppColors.green,
@@ -24,6 +26,7 @@ class DashboardPage extends StatelessWidget {
           const SizedBox(width: 16),
           Expanded(
               child: _trafficCard(
+                  context,
                   'ОТДАЧА',
                   formatRate(stats.uploadRate),
                   AppColors.red,
@@ -66,16 +69,18 @@ class DashboardPage extends StatelessWidget {
         Expanded(child: _interfaces()),
         const SizedBox(height: 4),
       ]));
-  Widget _trafficCard(String label, String rate, Color color, IconData icon,
-          List<double> values) =>
+  Widget _trafficCard(BuildContext context, String label, String rate,
+          Color color, IconData icon, List<double> values) =>
       Card(
           child: Container(
               height: 195,
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(16),
-                  gradient: LinearGradient(
-                      colors: [AppColors.card, color.withValues(alpha: .10)])),
+                  gradient: LinearGradient(colors: [
+                    Theme.of(context).colorScheme.surface,
+                    color.withValues(alpha: .10)
+                  ])),
               child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -94,15 +99,14 @@ class DashboardPage extends StatelessWidget {
                     ]),
                     const SizedBox(height: 9),
                     Text(rate,
-                        style: const TextStyle(
-                            color: AppColors.text,
+                        style: TextStyle(
+                            color: Theme.of(context).colorScheme.onSurface,
                             fontSize: 30,
                             fontWeight: FontWeight.w800)),
                     const Spacer(),
                     SizedBox(
                         height: 42,
-                        child: CustomPaint(
-                            painter: SparklinePainter(values, color)))
+                        child: SpeedSparkline(values: values, color: color))
                   ])));
   Widget _interfaces() => SectionCard(
           child:
@@ -123,6 +127,44 @@ class DashboardPage extends StatelessWidget {
                 '↓ ${formatRate(i.download)}  ↑ ${formatRate(i.upload)}',
                 style: const TextStyle(color: AppColors.green, fontSize: 12))))
       ]));
+}
+
+class SpeedSparkline extends StatelessWidget {
+  const SpeedSparkline({super.key, required this.values, required this.color});
+  final List<double> values;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final points = values.isEmpty
+        ? [const FlSpot(0, 0)]
+        : [
+            for (var i = 0; i < values.length; i++)
+              FlSpot(i.toDouble(), values[i])
+          ];
+    final maximum =
+        points.fold<double>(1, (max, point) => point.y > max ? point.y : max);
+    return LineChart(LineChartData(
+      minY: 0,
+      maxY: maximum * 1.15,
+      gridData: const FlGridData(show: false),
+      titlesData: const FlTitlesData(show: false),
+      borderData: FlBorderData(show: false),
+      lineTouchData: const LineTouchData(enabled: false),
+      lineBarsData: [
+        LineChartBarData(
+          spots: points,
+          isCurved: true,
+          curveSmoothness: .25,
+          color: color,
+          barWidth: 2,
+          dotData: const FlDotData(show: false),
+          belowBarData:
+              BarAreaData(show: true, color: color.withValues(alpha: .12)),
+        )
+      ],
+    ));
+  }
 }
 
 class SparklinePainter extends CustomPainter {

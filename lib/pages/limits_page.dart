@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/settings_service.dart';
+import '../services/limit_validation.dart';
 import '../services/traffic_service.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
@@ -20,6 +21,8 @@ class LimitsPage extends StatefulWidget {
 class _LimitsPageState extends State<LimitsPage> {
   late double download;
   late double upload;
+  late final TextEditingController downloadController;
+  late final TextEditingController uploadController;
   bool applying = false;
   bool enabled = false;
   @override
@@ -27,10 +30,34 @@ class _LimitsPageState extends State<LimitsPage> {
     super.initState();
     download = widget.settings.downloadLimit;
     upload = widget.settings.uploadLimit;
+    downloadController = TextEditingController(text: download.toString());
+    uploadController = TextEditingController(text: upload.toString());
     enabled = widget.settings.limitsEnabled;
   }
 
+  @override
+  void dispose() {
+    downloadController.dispose();
+    uploadController.dispose();
+    super.dispose();
+  }
+
+  double? _readLimit(TextEditingController controller) =>
+      parseLimit(controller.text);
+
   Future<void> apply() async {
+    final enteredDownload = _readLimit(downloadController);
+    final enteredUpload = _readLimit(uploadController);
+    if (enteredDownload == null || enteredUpload == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'Введите положительные значения от 0.1 до 500000 Мбит/с.')));
+      }
+      return;
+    }
+    download = enteredDownload;
+    upload = enteredUpload;
     setState(() => applying = true);
     final available =
         await widget.traffic.setLimitsEnabled(enabled, download, upload);
@@ -80,12 +107,31 @@ class _LimitsPageState extends State<LimitsPage> {
               'Входящая скорость',
               download,
               AppColors.green,
-              (v) => setState(() => download = v),
+              (v) => setState(() {
+                    download = v;
+                    downloadController.text = v.toStringAsFixed(1);
+                  }),
               Icons.arrow_downward_rounded),
           const SizedBox(height: 12),
-          _speed('Исходящая скорость', upload, AppColors.red,
-              (v) => setState(() => upload = v), Icons.arrow_upward_rounded),
+          _speed(
+              'Исходящая скорость',
+              upload,
+              AppColors.red,
+              (v) => setState(() {
+                    upload = v;
+                    uploadController.text = v.toStringAsFixed(1);
+                  }),
+              Icons.arrow_upward_rounded),
           const SizedBox(height: 10),
+          Row(children: [
+            Expanded(
+                child: _manualLimit('Входящая, Мбит/с', downloadController,
+                    (value) => setState(() => download = value))),
+            const SizedBox(width: 16),
+            Expanded(
+                child: _manualLimit('Исходящая, Мбит/с', uploadController,
+                    (value) => setState(() => upload = value))),
+          ]),
         ])),
         const SizedBox(height: 18),
         Row(children: [
@@ -137,6 +183,20 @@ class _LimitsPageState extends State<LimitsPage> {
             child: Text('${value.toStringAsFixed(1)} Мбит/с',
                 style: TextStyle(color: color, fontWeight: FontWeight.w700)))
       ]);
+  Widget _manualLimit(String label, TextEditingController controller,
+          ValueChanged<double> onChanged) =>
+      TextField(
+          controller: controller,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: InputDecoration(
+              labelText: label,
+              suffixText: 'Мбит/с',
+              border: const OutlineInputBorder()),
+          onChanged: (text) {
+            final value = parseLimit(text);
+            if (value != null) onChanged(value);
+          });
+
   Widget _limitCard(
           String title, double value, ValueChanged<double> onChange) =>
       SectionCard(

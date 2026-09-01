@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:traffic_limit/services/logger_service.dart';
 import 'package:traffic_limit/services/settings_service.dart';
 import 'package:traffic_limit/services/traffic_service.dart';
+import 'package:traffic_limit/models/traffic_models.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -49,5 +50,13 @@ void main() {
     expect(restored.limitsEnabled, isTrue);
     expect(restored.downloadLimit, 25);
     expect(restored.uploadLimit, 12);
+  });
+  test('traffic peak follows the largest selected direction sample', () {
+    final samples = <TrafficSample>[
+      TrafficSample(time: DateTime.now(), download: 30, upload: 12),
+      TrafficSample(time: DateTime.now(), download: 80, upload: 140),
+    ];
+    expect(TrafficService.peakFromSamples(samples, download: true), 80);
+    expect(TrafficService.peakFromSamples(samples, download: false), 140);
   });
 }
