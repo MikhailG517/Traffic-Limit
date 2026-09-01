@@ -30,6 +30,23 @@ class TrafficService {
   double get monthTotal => _monthlyTotal;
   final Map<String, double> _dailyTotals = {};
   DateTime? _lastHistorySave;
+  bool _serviceProbed = false;
+
+  String get _servicePath =>
+      '${File(Platform.resolvedExecutable).parent.path}${Platform.pathSeparator}TrafficLimitService.exe';
+
+  Future<void> ensureService() async {
+    if (!Platform.isWindows || _serviceProbed) return;
+    _serviceProbed = true;
+    try {
+      final status = await Process.run(_servicePath, ['--get-status']);
+      if (status.exitCode == 0) return;
+    } catch (_) {}
+    try {
+      await Process.run('sc.exe', ['start', 'TrafficLimitService']);
+    } catch (_) {}
+  }
+
   String _dayKey(DateTime value) =>
       '${value.year}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
   double _periodTotal(Duration period) {
@@ -82,6 +99,7 @@ class TrafficService {
         await _logger.error('Не удалось восстановить историю графиков');
       }
     }
+    await ensureService();
     _logger.info('Запуск мониторинга сетевых интерфейсов');
     _timer =
         Timer.periodic(const Duration(seconds: 1), (_) => _sample(onUpdate));
@@ -206,8 +224,7 @@ class TrafficService {
   }
 
   Future<Map<int, Map<String, dynamic>>> _readProcessCounters() async {
-    final service = File(
-        '${File(Platform.resolvedExecutable).parent.path}${Platform.pathSeparator}TrafficLimitService.exe');
+    final service = File(_servicePath);
     if (!service.existsSync()) return {};
     try {
       final result = await Process.run(service.path, ['--get-processes']);
@@ -315,8 +332,7 @@ class TrafficService {
       bool enabled, double download, double upload) async {
     if (enabled) return applyLimit(download, upload);
     if (!Platform.isWindows) return false;
-    final service = File(
-        '${File(Platform.resolvedExecutable).parent.path}${Platform.pathSeparator}TrafficLimitService.exe');
+    final service = File(_servicePath);
     if (!service.existsSync()) return false;
     final result = await Process.run(service.path, ['--disable']);
     await _logger.info('Ограничения ${enabled ? 'включены' : 'отключены'}');
@@ -327,8 +343,7 @@ class TrafficService {
     await _logger.info(
         'Запрошено ограничение: входящий ${download.toStringAsFixed(1)} Мбит/с, исходящий ${upload.toStringAsFixed(1)} Мбит/с');
     if (!Platform.isWindows) return false;
-    final service = File(
-        '${File(Platform.resolvedExecutable).parent.path}${Platform.pathSeparator}TrafficLimitService.exe');
+    final service = File(_servicePath);
     if (!service.existsSync()) return false;
     final result = await Process.run(service.path, [
       '--set-limit',
