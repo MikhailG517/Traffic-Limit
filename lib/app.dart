@@ -34,6 +34,12 @@ class TrafficLimitApp extends StatefulWidget {
   State<TrafficLimitApp> createState() => _TrafficLimitAppState();
 }
 
+const int kOverviewIndex = 0;
+const int kGraphsIndex = 1;
+const int kApplicationsIndex = 2;
+const int kLimitsIndex = 3;
+const int kSettingsIndex = 4;
+
 class _TrafficLimitAppState extends State<TrafficLimitApp> with WindowListener {
   late AppSettings appSettings;
   TrafficStats stats = const TrafficStats();
@@ -199,21 +205,23 @@ class _WindowTitleBarState extends State<WindowTitleBar> {
     return SizedBox(
         height: 42,
         child: Row(children: [
-          const SizedBox(width: 16),
-          Container(
-              width: 10,
-              height: 10,
-              decoration: const BoxDecoration(
-                  color: AppColors.blue, shape: BoxShape.circle)),
-          const SizedBox(width: 10),
-          Text('Traffic Limit',
-              style: TextStyle(
-                  color: scheme.onSurface, fontWeight: FontWeight.w700)),
           Expanded(
               child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
                   onDoubleTap: _toggleMaximize,
                   onPanStart: (_) => windowManager.startDragging(),
-                  child: const SizedBox.expand())),
+                  child: Row(children: [
+                    const SizedBox(width: 16),
+                    ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: Image.asset('assets/traffic_limit.png',
+                            width: 22, height: 22, fit: BoxFit.cover)),
+                    const SizedBox(width: 10),
+                    Text('Traffic Limit',
+                        style: TextStyle(
+                            color: scheme.onSurface,
+                            fontWeight: FontWeight.w700))
+                  ]))),
           _WindowButton(icon: Icons.remove, onPressed: windowManager.minimize),
           _WindowButton(
               icon: maximized ? Icons.filter_none : Icons.crop_square,
@@ -269,7 +277,10 @@ class NavigationRailPanel extends StatelessWidget {
               .entries
               .map((entry) => _item(context, entry.key, entry.value)),
           const Spacer(),
-          MonthlyUsage(used: used, limit: monthlyLimit),
+          MonthlyUsage(
+              used: used,
+              limit: monthlyLimit,
+              onTap: () => onSelected(kLimitsIndex)),
         ]));
   }
 
@@ -320,42 +331,52 @@ class NavigationRailPanel extends StatelessWidget {
 }
 
 class MonthlyUsage extends StatelessWidget {
-  const MonthlyUsage({super.key, required this.used, required this.limit});
+  const MonthlyUsage(
+      {super.key,
+      required this.used,
+      required this.limit,
+      required this.onTap});
   final double used;
   final double limit;
+  final VoidCallback onTap;
   @override
   Widget build(BuildContext context) {
     final progress = limit <= 0 ? 0.0 : (used / (limit * 1024)).clamp(0.0, 1.0);
-    return Container(
-        padding: const EdgeInsets.all(15),
-        decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            border: Border.all(color: Theme.of(context).dividerColor),
-            borderRadius: BorderRadius.circular(14)),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('ЛИМИТ МЕСЯЦА',
-              style: TextStyle(
-                  color: AppColors.lightBlue,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700)),
-          const SizedBox(height: 13),
-          LinearProgressIndicator(
-              value: progress,
-              minHeight: 6,
-              backgroundColor: Theme.of(context).dividerColor,
-              valueColor: const AlwaysStoppedAnimation(AppColors.cyan)),
-          const SizedBox(height: 11),
-          Text.rich(TextSpan(
-              text: formatData(used),
-              style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurface,
-                  fontWeight: FontWeight.w700),
-              children: [
-                TextSpan(
-                    text: ' из ${limit.toStringAsFixed(0)} ГБ',
-                    style: const TextStyle(
-                        color: AppColors.muted, fontWeight: FontWeight.w400))
-              ])),
-        ]));
+    return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+            padding: const EdgeInsets.all(15),
+            decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                border: Border.all(color: Theme.of(context).dividerColor),
+                borderRadius: BorderRadius.circular(14)),
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('ЛИМИТ МЕСЯЦА',
+                  style: TextStyle(
+                      color: AppColors.lightBlue,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700)),
+              const SizedBox(height: 13),
+              LinearProgressIndicator(
+                  value: progress,
+                  minHeight: 6,
+                  backgroundColor: Theme.of(context).dividerColor,
+                  valueColor: const AlwaysStoppedAnimation(AppColors.cyan)),
+              const SizedBox(height: 11),
+              Text.rich(TextSpan(
+                  text: formatData(used),
+                  style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface,
+                      fontWeight: FontWeight.w700),
+                  children: [
+                    TextSpan(
+                        text: ' из ${limit.toStringAsFixed(0)} ГБ',
+                        style: const TextStyle(
+                            color: AppColors.muted,
+                            fontWeight: FontWeight.w400))
+                  ])),
+            ])));
   }
 }

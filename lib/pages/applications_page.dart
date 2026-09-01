@@ -52,11 +52,10 @@ class ApplicationsPage extends StatelessWidget {
             ])),
         Expanded(
             child: _metric(
-                'Скорость',
-                process.hasByteCounters
-                    ? '↓ ${formatRate(process.download)} ↑ ${formatRate(process.upload)}'
-                    : '↓ 0 Кбит/с ↑ 0 Кбит/с',
-                AppColors.blue)),
+                '↓ Загрузка', formatRate(process.download), AppColors.green)),
+        Expanded(
+            child:
+                _metric('↑ Отдача', formatRate(process.upload), AppColors.red)),
         Expanded(
             child: _metric(
                 'Входящий',
