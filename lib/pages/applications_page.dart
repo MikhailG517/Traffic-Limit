@@ -4,9 +4,27 @@ import '../services/traffic_service.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 
-class ApplicationsPage extends StatelessWidget {
+class ApplicationsPage extends StatefulWidget {
   const ApplicationsPage({super.key, required this.traffic});
   final TrafficService traffic;
+  @override
+  State<ApplicationsPage> createState() => _ApplicationsPageState();
+}
+
+class _ApplicationsPageState extends State<ApplicationsPage> {
+  String status = 'Проверка…';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStatus();
+  }
+
+  Future<void> _loadStatus() async {
+    final result = await widget.traffic.nativeTelemetryStatus();
+    if (mounted) setState(() => status = result);
+  }
+
   @override
   Widget build(BuildContext context) => PageShell(
       title: 'Приложения',
@@ -14,24 +32,25 @@ class ApplicationsPage extends StatelessWidget {
       child: SectionCard(
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Row(children: [
-          Expanded(
+        Row(children: [
+          const Expanded(
               child: Text('Активные сетевые соединения',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700))),
-          Text('Обновляется каждую секунду',
-              style: TextStyle(color: AppColors.muted, fontSize: 12))
+          Text(status,
+              style: const TextStyle(color: AppColors.muted, fontSize: 12))
         ]),
         const SizedBox(height: 14),
         Expanded(
-            child: traffic.processes.isEmpty
+            child: widget.traffic.processes.isEmpty
                 ? const Center(
                     child: Text('Активных соединений нет',
                         style: TextStyle(color: AppColors.muted)))
                 : ListView.separated(
-                    itemCount: traffic.processes.length,
+                    itemCount: widget.traffic.processes.length,
                     separatorBuilder: (_, __) =>
                         const Divider(color: AppColors.border, height: 1),
-                    itemBuilder: (_, index) => _row(traffic.processes[index]))),
+                    itemBuilder: (_, index) =>
+                        _row(widget.traffic.processes[index]))),
       ])));
   Widget _row(ProcessTraffic process) => Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),

@@ -9,7 +9,7 @@ add_executable(TrafficLimitService WIN32 main.cpp service.cpp traffic_counter.cp
 target_compile_definitions(TrafficLimitService PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0602 NTDDI_VERSION=0x06020000 TRAFFIC_LIMIT_USE_WINDIVERT)
 target_include_directories(TrafficLimitService PRIVATE "${WINDIVERT_ROOT}/include")
 target_link_directories(TrafficLimitService PRIVATE "${WINDIVERT_ROOT}/x64")
-target_link_libraries(TrafficLimitService PRIVATE iphlpapi advapi32 userenv ws2_32 WinDivert)
+target_link_libraries(TrafficLimitService PRIVATE iphlpapi advapi32 userenv ws2_32 winmm WinDivert)
 add_custom_command(TARGET TrafficLimitService POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_if_different "${WINDIVERT_ROOT}/x64/WinDivert.dll" "$<TARGET_FILE_DIR:TrafficLimitService>/WinDivert.dll"
   COMMAND ${CMAKE_COMMAND} -E copy_if_different "${WINDIVERT_ROOT}/x64/WinDivert64.sys" "$<TARGET_FILE_DIR:TrafficLimitService>/WinDivert64.sys")

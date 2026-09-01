@@ -6,13 +6,25 @@ import '../theme.dart';
 import '../widgets/common.dart';
 
 class DashboardPage extends StatelessWidget {
-  const DashboardPage({super.key, required this.stats, required this.service});
+  const DashboardPage(
+      {super.key,
+      required this.stats,
+      required this.service,
+      required this.onOpenLimits});
   final TrafficStats stats;
   final TrafficService service;
+  final VoidCallback onOpenLimits;
   @override
   Widget build(BuildContext context) => PageShell(
       title: 'Трафик в реальном времени',
-      action: const LivePill(),
+      action: Row(mainAxisSize: MainAxisSize.min, children: [
+        const LivePill(),
+        const SizedBox(width: 12),
+        FilledButton.icon(
+            onPressed: onOpenLimits,
+            icon: const Icon(Icons.speed_rounded, size: 18),
+            label: const Text('Ограничения'))
+      ]),
       child: Column(children: [
         Row(children: [
           Expanded(

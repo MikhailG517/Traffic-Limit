@@ -35,6 +35,23 @@ class TrafficService {
   String get _servicePath =>
       '${File(Platform.resolvedExecutable).parent.path}${Platform.pathSeparator}TrafficLimitService.exe';
 
+  Future<String> nativeTelemetryStatus() async {
+    if (!Platform.isWindows) return 'Только для Windows';
+    final service = File(_servicePath);
+    if (!service.existsSync()) return 'Служба не найдена';
+    try {
+      final result = await Process.run(service.path, ['--get-status']);
+      if (result.exitCode != 0) return 'Служба не отвечает';
+      final status = Map<String, dynamic>.from(
+          jsonDecode(result.stdout.toString()) as Map);
+      final driver = status['driver'] == true;
+      if (!driver) return 'Драйвер WinDivert недоступен';
+      return 'Активно';
+    } catch (_) {
+      return 'Ошибка опроса';
+    }
+  }
+
   Future<void> ensureService() async {
     if (!Platform.isWindows || _serviceProbed) return;
     _serviceProbed = true;

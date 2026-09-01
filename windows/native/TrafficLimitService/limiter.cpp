@@ -4,6 +4,7 @@
 #include <windows.h>
 #include <chrono>
 #include <thread>
+#include <timeapi.h>
 
 namespace {
 constexpr UINT kControlPacketBytes = 256;
@@ -55,6 +56,14 @@ bool PacketLimiter::start(uint64_t downloadBits, uint64_t uploadBits) {
   }
   inboundHandle_ = inbound;
   outboundHandle_ = outbound;
+  // ~1 ms system timer so pacing delays are accurate (default ~15.6 ms
+  // granularity otherwise over-throttles the link).
+  ::timeBeginPeriod(1);
+  for (auto* handle : {inbound, outbound}) {
+    ::WinDivertSetParam(handle, WINDIVERT_PARAM_QUEUE_SIZE,
+                        static_cast<UINT64>(64ULL * 1024ULL * 1024ULL));
+    ::WinDivertSetParam(handle, WINDIVERT_PARAM_QUEUE_LENGTH, 4096);
+  }
   running_ = true;
   inboundWorker_ = std::thread(&PacketLimiter::loop, this, inbound, std::cref(download_));
   outboundWorker_ = std::thread(&PacketLimiter::loop, this, outbound, std::cref(upload_));
@@ -71,6 +80,7 @@ void PacketLimiter::stop() {
   const auto outbound = static_cast<HANDLE>(outboundHandle_);
   inboundHandle_ = nullptr;
   outboundHandle_ = nullptr;
+  ::timeEndPeriod(1);
   if (inbound) WinDivertClose(inbound);
   if (outbound) WinDivertClose(outbound);
   if (inboundWorker_.joinable()) inboundWorker_.join();

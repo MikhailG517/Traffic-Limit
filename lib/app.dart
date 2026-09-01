@@ -174,7 +174,10 @@ class _TrafficLimitAppState extends State<TrafficLimitApp> with WindowListener {
             system: widget.system,
             onExit: _exitApp);
       default:
-        return DashboardPage(stats: stats, service: widget.traffic);
+        return DashboardPage(
+            stats: stats,
+            service: widget.traffic,
+            onOpenLimits: () => setState(() => selected = kLimitsIndex));
     }
   }
 }
