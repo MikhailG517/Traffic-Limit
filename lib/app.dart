@@ -263,20 +263,6 @@ class NavigationRailPanel extends StatelessWidget {
         color: scheme.surface,
         padding: const EdgeInsets.fromLTRB(14, 20, 14, 16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Container(
-                width: 12,
-                height: 12,
-                decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.blue,
-                    boxShadow: [
-                      BoxShadow(color: AppColors.blue, blurRadius: 12)
-                    ])),
-            const SizedBox(width: 12),
-            const Text('Traffic Limit',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700))
-          ]),
           const SizedBox(height: 42),
           ...['Обзор', 'Графики', 'Приложения', 'Ограничения', 'Настройки']
               .asMap()

@@ -5,3 +5,5 @@ double? parseLimit(String input) {
   }
   return value;
 }
+
+int mbpsToBitsPerSecond(double mbps) => (mbps * 1000000).round();

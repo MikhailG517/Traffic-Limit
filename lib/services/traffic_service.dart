@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/traffic_models.dart';
 import 'rate_math.dart';
+import 'limit_validation.dart';
 import 'logger_service.dart';
 
 class TrafficService {
@@ -331,8 +332,8 @@ class TrafficService {
     if (!service.existsSync()) return false;
     final result = await Process.run(service.path, [
       '--set-limit',
-      '--download=${(download * 1000000).round()}',
-      '--upload=${(upload * 1000000).round()}'
+      '--download=${mbpsToBitsPerSecond(download)}',
+      '--upload=${mbpsToBitsPerSecond(upload)}'
     ]);
     return result.exitCode == 0 &&
         result.stdout.toString().contains('"limiter":true');

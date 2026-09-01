@@ -36,6 +36,19 @@ class _LimitsPageState extends State<LimitsPage> {
   }
 
   @override
+  void didUpdateWidget(covariant LimitsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.settings.downloadLimit != download ||
+        widget.settings.uploadLimit != upload) {
+      download = widget.settings.downloadLimit;
+      upload = widget.settings.uploadLimit;
+      downloadController.text = download.toString();
+      uploadController.text = upload.toString();
+    }
+    enabled = widget.settings.limitsEnabled;
+  }
+
+  @override
   void dispose() {
     downloadController.dispose();
     uploadController.dispose();
@@ -45,7 +58,20 @@ class _LimitsPageState extends State<LimitsPage> {
   double? _readLimit(TextEditingController controller) =>
       parseLimit(controller.text);
 
-  Future<void> apply() async {
+  void _persist({bool? switchEnabled}) {
+    final enteredDownload = _readLimit(downloadController);
+    final enteredUpload = _readLimit(uploadController);
+    if (enteredDownload == null || enteredUpload == null) return;
+    download = enteredDownload;
+    upload = enteredUpload;
+    widget.onChanged(widget.settings.copyWith(
+        limitsEnabled: switchEnabled ?? enabled,
+        downloadLimit: download,
+        uploadLimit: upload));
+  }
+
+  Future<void> _applyAndPersist({bool? switchEnabled}) async {
+    final nextEnabled = switchEnabled ?? enabled;
     final enteredDownload = _readLimit(downloadController);
     final enteredUpload = _readLimit(uploadController);
     if (enteredDownload == null || enteredUpload == null) {
@@ -60,10 +86,10 @@ class _LimitsPageState extends State<LimitsPage> {
     upload = enteredUpload;
     setState(() => applying = true);
     final available =
-        await widget.traffic.setLimitsEnabled(enabled, download, upload);
+        await widget.traffic.setLimitsEnabled(nextEnabled, download, upload);
     if (available) {
       widget.onChanged(widget.settings.copyWith(
-          limitsEnabled: enabled,
+          limitsEnabled: nextEnabled,
           downloadLimit: download,
           uploadLimit: upload));
     } else {
@@ -73,14 +99,16 @@ class _LimitsPageState extends State<LimitsPage> {
       setState(() => applying = false);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(available
-              ? (enabled ? 'Ограничения включены.' : 'Ограничения отключены.')
+              ? (nextEnabled
+                  ? 'Ограничения включены.'
+                  : 'Ограничения отключены.')
               : 'Не удалось изменить состояние: нужна служба и подписанный WinDivert-драйвер.')));
     }
   }
 
   Future<void> toggle(bool value) async {
     setState(() => enabled = value);
-    await apply();
+    await _applyAndPersist(switchEnabled: value);
   }
 
   @override
@@ -103,25 +131,21 @@ class _LimitsPageState extends State<LimitsPage> {
                 label: Text(enabled ? 'Отключить' : 'Включить')),
           ]),
           const SizedBox(height: 18),
-          _speed(
-              'Входящая скорость',
-              download,
-              AppColors.green,
-              (v) => setState(() {
-                    download = v;
-                    downloadController.text = v.toStringAsFixed(1);
-                  }),
-              Icons.arrow_downward_rounded),
+          _speed('Входящая скорость', download, AppColors.green, (v) {
+            setState(() {
+              download = v;
+              downloadController.text = v.toStringAsFixed(1);
+            });
+            _persist();
+          }, Icons.arrow_downward_rounded),
           const SizedBox(height: 12),
-          _speed(
-              'Исходящая скорость',
-              upload,
-              AppColors.red,
-              (v) => setState(() {
-                    upload = v;
-                    uploadController.text = v.toStringAsFixed(1);
-                  }),
-              Icons.arrow_upward_rounded),
+          _speed('Исходящая скорость', upload, AppColors.red, (v) {
+            setState(() {
+              upload = v;
+              uploadController.text = v.toStringAsFixed(1);
+            });
+            _persist();
+          }, Icons.arrow_upward_rounded),
           const SizedBox(height: 10),
           Row(children: [
             Expanded(
@@ -176,7 +200,7 @@ class _LimitsPageState extends State<LimitsPage> {
                 divisions: 999,
                 onChanged: onChanged,
                 onChangeEnd: (_) {
-                  if (enabled) apply();
+                  if (enabled) _applyAndPersist();
                 })),
         SizedBox(
             width: 92,
@@ -194,7 +218,10 @@ class _LimitsPageState extends State<LimitsPage> {
               border: const OutlineInputBorder()),
           onChanged: (text) {
             final value = parseLimit(text);
-            if (value != null) onChanged(value);
+            if (value != null) {
+              onChanged(value);
+              _persist();
+            }
           });
 
   Widget _limitCard(

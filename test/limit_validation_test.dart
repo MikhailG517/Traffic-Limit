@@ -13,4 +13,10 @@ void main() {
     expect(parseLimit('abc'), isNull);
     expect(parseLimit('500001'), isNull);
   });
+
+  test('converts Mbps to bits per second for the native limiter', () {
+    expect(mbpsToBitsPerSecond(30), 30000000);
+    expect(mbpsToBitsPerSecond(0.5), 500000);
+    expect(mbpsToBitsPerSecond(5), 5000000);
+  });
 }
