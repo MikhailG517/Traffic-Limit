@@ -250,8 +250,18 @@ class TrafficService {
     }
   }
 
-  double peakFor(HistoryPeriod period, {required bool download}) =>
-      peakFromSamples(samplesFor(period), download: download);
+  double peakFor(HistoryPeriod period, {required bool download}) {
+    final window = switch (period) {
+      HistoryPeriod.hour => const Duration(hours: 1),
+      HistoryPeriod.week => const Duration(days: 7),
+      HistoryPeriod.month => const Duration(days: 30),
+      HistoryPeriod.year => const Duration(days: 365),
+    };
+    final since = DateTime.now().subtract(window);
+    return peakFromSamples(
+        samples.where((sample) => sample.time.isAfter(since)).toList(),
+        download: download);
+  }
 
   static double peakFromSamples(List<TrafficSample> points,
       {required bool download}) {
