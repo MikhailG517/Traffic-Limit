@@ -9,6 +9,7 @@ class AppSettings {
       this.limitsEnabled = false,
       this.autoPauseAtLimit = true,
       this.themeMode = 'dark',
+      this.diagnostics = false,
       this.downloadLimit = 10,
       this.uploadLimit = 10,
       this.dailyLimit = 10,
@@ -20,6 +21,7 @@ class AppSettings {
   final bool limitsEnabled;
   final bool autoPauseAtLimit;
   final String themeMode;
+  final bool diagnostics;
   final double downloadLimit;
   final double uploadLimit;
   final double dailyLimit;
@@ -33,6 +35,7 @@ class AppSettings {
           bool? limitsEnabled,
           bool? autoPauseAtLimit,
           String? themeMode,
+          bool? diagnostics,
           double? downloadLimit,
           double? uploadLimit,
           double? dailyLimit,
@@ -45,6 +48,7 @@ class AppSettings {
         limitsEnabled: limitsEnabled ?? this.limitsEnabled,
         autoPauseAtLimit: autoPauseAtLimit ?? this.autoPauseAtLimit,
         themeMode: themeMode ?? this.themeMode,
+        diagnostics: diagnostics ?? this.diagnostics,
         downloadLimit: downloadLimit ?? this.downloadLimit,
         uploadLimit: uploadLimit ?? this.uploadLimit,
         dailyLimit: dailyLimit ?? this.dailyLimit,
@@ -64,6 +68,7 @@ class SettingsService {
         limitsEnabled: _preferences.getBool('limitsEnabled') ?? false,
         autoPauseAtLimit: _preferences.getBool('autoPauseAtLimit') ?? true,
         themeMode: _preferences.getString('themeMode') ?? 'dark',
+        diagnostics: _preferences.getBool('diagnostics') ?? false,
         downloadLimit: _preferences.getDouble('downloadLimit') ?? 10,
         uploadLimit: _preferences.getDouble('uploadLimit') ?? 10,
         dailyLimit: _preferences.getDouble('dailyLimit') ?? 10,
@@ -79,6 +84,7 @@ class SettingsService {
       _preferences.setBool('limitsEnabled', value.limitsEnabled),
       _preferences.setBool('autoPauseAtLimit', value.autoPauseAtLimit),
       _preferences.setString('themeMode', value.themeMode),
+      _preferences.setBool('diagnostics', value.diagnostics),
       _preferences.setDouble('downloadLimit', value.downloadLimit),
       _preferences.setDouble('uploadLimit', value.uploadLimit),
       _preferences.setDouble('dailyLimit', value.dailyLimit),

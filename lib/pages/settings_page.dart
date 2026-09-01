@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/settings_service.dart';
 import '../services/system_settings_service.dart';
+import '../services/logger_service.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 
@@ -10,10 +11,12 @@ class SettingsPage extends StatelessWidget {
       required this.settings,
       required this.onChanged,
       required this.system,
+      required this.logger,
       required this.onExit});
   final AppSettings settings;
   final ValueChanged<AppSettings> onChanged;
   final SystemSettingsService system;
+  final LoggerService logger;
   final Future<void> Function() onExit;
   Future<void> _autostart(BuildContext context, bool enabled) async {
     final ok = await system.setAutostart(enabled);
@@ -52,6 +55,37 @@ class SettingsPage extends StatelessWidget {
             value: settings.limitNotifications,
             onChanged: (value) =>
                 onChanged(settings.copyWith(limitNotifications: value))),
+        const Divider(color: AppColors.border),
+        ToggleRow(
+            title: 'Диагностика',
+            description:
+                'Подробное логирование запуска, трея, лимита и скорости приложений',
+            value: settings.diagnostics,
+            onChanged: (value) =>
+                onChanged(settings.copyWith(diagnostics: value))),
+        const Divider(color: AppColors.border),
+        Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Row(children: [
+              const Expanded(
+                  child: Text('Журнал приложения',
+                      style: TextStyle(fontWeight: FontWeight.w700))),
+              OutlinedButton.icon(
+                  onPressed: () => logger.openLogFolder(),
+                  icon: const Icon(Icons.folder_open_rounded, size: 18),
+                  label: const Text('Папка с логами')),
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                  onPressed: () async {
+                    final path = await logger.export();
+                    if (path.isNotEmpty && context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Лог сохранён: $path')));
+                    }
+                  },
+                  icon: const Icon(Icons.save_alt_rounded, size: 18),
+                  label: const Text('Экспорт')),
+            ])),
         const Divider(color: AppColors.border),
         Padding(
             padding: const EdgeInsets.only(top: 15),

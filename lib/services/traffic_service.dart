@@ -279,8 +279,9 @@ class TrafficService {
           .substring(3));
       if (received == null || sent == null) return null;
       return TrafficTotals(received: received, sent: sent, linkKbit: 500000);
-    } catch (_) {
-      await _logger.error('Не удалось прочитать счётчики Windows');
+    } catch (e, st) {
+      await _logger.error('Не удалось прочитать счётчики Windows',
+          error: e, stack: st);
       return null;
     }
   }
@@ -347,6 +348,8 @@ class TrafficService {
   void dispose() => _timer?.cancel();
   Future<bool> setLimitsEnabled(
       bool enabled, double download, double upload) async {
+    await _logger.info('Переключение ограничения',
+        params: {'enabled': enabled, 'download': download, 'upload': upload});
     if (enabled) return applyLimit(download, upload);
     if (!Platform.isWindows) return false;
     final service = File(_servicePath);
@@ -357,8 +360,8 @@ class TrafficService {
   }
 
   Future<bool> applyLimit(double download, double upload) async {
-    await _logger.info(
-        'Запрошено ограничение: входящий ${download.toStringAsFixed(1)} Мбит/с, исходящий ${upload.toStringAsFixed(1)} Мбит/с');
+    await _logger.info('Применение ограничения',
+        params: {'download_mbps': download, 'upload_mbps': upload});
     if (!Platform.isWindows) return false;
     final service = File(_servicePath);
     if (!service.existsSync()) return false;

@@ -49,6 +49,11 @@ class _TrafficLimitAppState extends State<TrafficLimitApp> with WindowListener {
     super.initState();
     windowManager.addListener(this);
     appSettings = widget.settings.load();
+    widget.logger.setDiagnostics(appSettings.diagnostics);
+    widget.logger.info('Приложение запущено', params: {
+      'startHidden': widget.startHidden,
+      'diagnostics': appSettings.diagnostics
+    });
     unawaited(_initializeTray());
     _syncAutostart();
     widget.traffic.start(() {
@@ -70,8 +75,16 @@ class _TrafficLimitAppState extends State<TrafficLimitApp> with WindowListener {
     await widget.tray.initialize(
         onEnableLimits: () => _setLimitsFromTray(true),
         onDisableLimits: () => _setLimitsFromTray(false),
-        onQuit: _exitApp);
+        onQuit: _exitApp,
+        onToggleDiagnostics: _toggleDiagnostics,
+        onOpenLogs: widget.logger.openLogFolder);
     await widget.tray.setLimitsEnabled(appSettings.limitsEnabled);
+    widget.tray.setDiagnostics(appSettings.diagnostics);
+  }
+
+  Future<void> _toggleDiagnostics() async {
+    final value = !appSettings.diagnostics;
+    await updateSettings(appSettings.copyWith(diagnostics: value));
   }
 
   Future<void> _restoreLimit() async {
@@ -129,8 +142,14 @@ class _TrafficLimitAppState extends State<TrafficLimitApp> with WindowListener {
 
   Future<void> updateSettings(AppSettings value) async {
     final changed = value.limitsEnabled != appSettings.limitsEnabled;
+    final diagChanged = value.diagnostics != appSettings.diagnostics;
     setState(() => appSettings = value);
     await widget.settings.save(value);
+    if (diagChanged) {
+      widget.logger.setDiagnostics(value.diagnostics);
+      await widget.logger
+          .info('Диагностика ${value.diagnostics ? 'включена' : 'выключена'}');
+    }
     if (changed) await widget.tray.setLimitsEnabled(value.limitsEnabled);
   }
 
@@ -172,6 +191,7 @@ class _TrafficLimitAppState extends State<TrafficLimitApp> with WindowListener {
             settings: appSettings,
             onChanged: updateSettings,
             system: widget.system,
+            logger: widget.logger,
             onExit: _exitApp);
       default:
         return DashboardPage(

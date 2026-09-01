@@ -22,14 +22,16 @@ Future<void> main() async {
       titleBarStyle: TitleBarStyle.hidden,
       windowButtonVisibility: false);
   await windowManager.waitUntilReadyToShow(options, () async {
-    if (!launch.startHidden) {
+    // Window is created for the tray icon / Flutter view but is hidden on
+    // startup; it can be opened from the tray or via the --show flag.
+    if (launch.showWindow) {
       await windowManager.show();
       await windowManager.focus();
     }
   });
   await windowManager.setPreventClose(true);
   final preferences = await SharedPreferences.getInstance();
-  final logger = LoggerService();
+  final logger = LoggerService(diagnostics: launch.diagnostics);
   final tray = TrayService();
   runApp(TrafficLimitApp(
       settings: SettingsService(preferences),
@@ -37,5 +39,5 @@ Future<void> main() async {
       system: SystemSettingsService(),
       traffic: TrafficService(logger, preferences),
       tray: tray,
-      startHidden: launch.startHidden));
+      startHidden: true));
 }

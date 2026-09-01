@@ -5,18 +5,25 @@ import '../models/traffic_models.dart';
 
 class TrayService with TrayListener {
   bool _limitsEnabled = false;
+  bool _diagnostics = false;
   Future<void> Function()? onEnableLimitsCallback;
   Future<void> Function()? onDisableLimitsCallback;
   Future<void> Function()? onQuitCallback;
+  Future<void> Function()? onToggleDiagnosticsCallback;
+  Future<void> Function()? onOpenLogsCallback;
 
   Future<void> initialize({
     required Future<void> Function() onEnableLimits,
     required Future<void> Function() onDisableLimits,
     required Future<void> Function() onQuit,
+    required Future<void> Function() onToggleDiagnostics,
+    required Future<void> Function() onOpenLogs,
   }) async {
     onEnableLimitsCallback = onEnableLimits;
     onDisableLimitsCallback = onDisableLimits;
     onQuitCallback = onQuit;
+    onToggleDiagnosticsCallback = onToggleDiagnostics;
+    onOpenLogsCallback = onOpenLogs;
     trayManager.addListener(this);
     // tray_manager resolves this relative asset to data/flutter_assets itself.
     // Passing an absolute path makes older Windows plugin versions build an
@@ -27,7 +34,7 @@ class TrayService with TrayListener {
     await _refreshMenu();
   }
 
-  static Menu menuFor(bool limitsEnabled) => Menu(items: [
+  static Menu menuFor(bool limitsEnabled, bool diagnostics) => Menu(items: [
         MenuItem(key: 'show', label: 'Открыть Traffic Limit'),
         MenuItem.separator(),
         MenuItem(
@@ -45,6 +52,10 @@ class TrayService with TrayListener {
             label: 'Отключить ограничение скорости',
             disabled: !limitsEnabled),
         MenuItem.separator(),
+        MenuItem.checkbox(
+            key: 'diagnostics', label: 'Диагностика', checked: diagnostics),
+        MenuItem(key: 'open-logs', label: 'Открыть журнал/логи'),
+        MenuItem.separator(),
         MenuItem(key: 'quit', label: 'Завершить приложение'),
       ]);
 
@@ -54,8 +65,14 @@ class TrayService with TrayListener {
     await _refreshMenu();
   }
 
+  void setDiagnostics(bool value) {
+    if (_diagnostics == value) return;
+    _diagnostics = value;
+    _refreshMenu();
+  }
+
   Future<void> _refreshMenu() =>
-      trayManager.setContextMenu(menuFor(_limitsEnabled));
+      trayManager.setContextMenu(menuFor(_limitsEnabled, _diagnostics));
 
   Future<void> update(double download, double upload,
           {required bool showSpeed}) =>
@@ -78,6 +95,10 @@ class TrayService with TrayListener {
         unawaited(onEnableLimitsCallback?.call());
       case 'disable-limits':
         unawaited(onDisableLimitsCallback?.call());
+      case 'diagnostics':
+        unawaited(onToggleDiagnosticsCallback?.call());
+      case 'open-logs':
+        unawaited(onOpenLogsCallback?.call());
       case 'quit':
         unawaited(onQuitCallback?.call());
     }

@@ -3,7 +3,7 @@ import 'package:traffic_limit/services/tray_service.dart';
 
 void main() {
   test('tray menu exposes explicit commands when limiting is off', () {
-    final items = TrayService.menuFor(false).items!;
+    final items = TrayService.menuFor(false, false).items!;
     expect(
         items.any((item) =>
             item.key == 'limit-status' && item.label!.contains('выключено')),
@@ -12,11 +12,14 @@ void main() {
         isFalse);
     expect(items.singleWhere((item) => item.key == 'disable-limits').disabled,
         isTrue);
+    expect(items.singleWhere((item) => item.key == 'diagnostics').checked,
+        isFalse);
+    expect(items.any((item) => item.key == 'open-logs'), isTrue);
     expect(items.any((item) => item.key == 'quit'), isTrue);
   });
 
-  test('tray menu reports active limiting and allows only disabling', () {
-    final items = TrayService.menuFor(true).items!;
+  test('tray menu reports active limiting and enabled diagnostics', () {
+    final items = TrayService.menuFor(true, true).items!;
     expect(
         items.any((item) =>
             item.key == 'limit-status' && item.label!.contains('включено')),
@@ -25,5 +28,7 @@ void main() {
         isTrue);
     expect(items.singleWhere((item) => item.key == 'disable-limits').disabled,
         isFalse);
+    expect(
+        items.singleWhere((item) => item.key == 'diagnostics').checked, isTrue);
   });
 }
