@@ -11,12 +11,10 @@ class PacketLimiter {
   bool available() const;
 
  private:
-  void loop(void* handle, const std::atomic_uint64_t& rate);
+  void loop();
   std::atomic_bool running_{false};
   std::atomic_uint64_t download_{0};
   std::atomic_uint64_t upload_{0};
-  void* inboundHandle_ = nullptr;
-  void* outboundHandle_ = nullptr;
-  std::thread inboundWorker_;
-  std::thread outboundWorker_;
+  void* handle_ = nullptr;
+  std::thread worker_;
 };

@@ -404,7 +404,15 @@ class TrafficService {
     if (!service.existsSync()) return false;
     final text = await _nativeResponse(
         '--set-limit --download=${mbpsToBitsPerSecond(download)} --upload=${mbpsToBitsPerSecond(upload)}');
-    final ok = text != null && text.contains('"limiter":true');
+    var ok = false;
+    if (text != null) {
+      try {
+        final status = Map<String, dynamic>.from(jsonDecode(text) as Map);
+        ok = status['limiter'] == true;
+      } catch (_) {
+        ok = text.contains('"limiter":true');
+      }
+    }
     await _logger.info('Результат применения ограничения',
         params: {'ok': ok, 'response': text});
     return ok;

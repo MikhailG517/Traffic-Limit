@@ -50,26 +50,17 @@ bool PacketLimiter::start(uint64_t downloadBits, uint64_t uploadBits) {
   upload_ = uploadBits;
 #ifdef TRAFFIC_LIMIT_USE_WINDIVERT
   if (running_) return true;
-  const auto inbound = openDivert("inbound and (tcp or udp)");
-  const auto outbound = openDivert("outbound and (tcp or udp)");
-  if (!inbound || !outbound) {
-    if (inbound) WinDivertClose(inbound);
-    if (outbound) WinDivertClose(outbound);
-    return false;
-  }
-  inboundHandle_ = inbound;
-  outboundHandle_ = outbound;
-  // ~1 ms system timer so pacing delays are accurate (default ~15.6 ms
-  // granularity otherwise over-throttles the link).
+  // Single "tcp or udp" handle is the most compatible across WinDivert
+  // environments. Direction is chosen per packet via address.Outbound.
+  const auto handle = openDivert("tcp or udp");
+  if (!handle) return false;
+  handle_ = handle;
   ::timeBeginPeriod(1);
-  for (auto* handle : {inbound, outbound}) {
-    ::WinDivertSetParam(handle, WINDIVERT_PARAM_QUEUE_SIZE,
-                        static_cast<UINT64>(64ULL * 1024ULL * 1024ULL));
-    ::WinDivertSetParam(handle, WINDIVERT_PARAM_QUEUE_LENGTH, 4096);
-  }
+  ::WinDivertSetParam(handle, WINDIVERT_PARAM_QUEUE_SIZE,
+                      static_cast<UINT64>(64ULL * 1024ULL * 1024ULL));
+  ::WinDivertSetParam(handle, WINDIVERT_PARAM_QUEUE_LENGTH, 4096);
   running_ = true;
-  inboundWorker_ = std::thread(&PacketLimiter::loop, this, inbound, std::cref(download_));
-  outboundWorker_ = std::thread(&PacketLimiter::loop, this, outbound, std::cref(upload_));
+  worker_ = std::thread(&PacketLimiter::loop, this);
   return true;
 #else
   return false;
@@ -79,31 +70,22 @@ bool PacketLimiter::start(uint64_t downloadBits, uint64_t uploadBits) {
 void PacketLimiter::stop() {
   running_ = false;
 #ifdef TRAFFIC_LIMIT_USE_WINDIVERT
-  const auto inbound = static_cast<HANDLE>(inboundHandle_);
-  const auto outbound = static_cast<HANDLE>(outboundHandle_);
-  inboundHandle_ = nullptr;
-  outboundHandle_ = nullptr;
-  // Unblock in-flight recv/send so workers exit promptly and the link returns
-  // to full speed without a restart.
-  if (inbound) {
-    ::WinDivertShutdown(inbound, WINDIVERT_SHUTDOWN_BOTH);
-    ::WinDivertClose(inbound);
-  }
-  if (outbound) {
-    ::WinDivertShutdown(outbound, WINDIVERT_SHUTDOWN_BOTH);
-    ::WinDivertClose(outbound);
+  const auto handle = static_cast<HANDLE>(handle_);
+  handle_ = nullptr;
+  if (handle) {
+    ::WinDivertShutdown(handle, WINDIVERT_SHUTDOWN_BOTH);
+    ::WinDivertClose(handle);
   }
   ::timeEndPeriod(1);
-  if (inboundWorker_.joinable()) inboundWorker_.join();
-  if (outboundWorker_.joinable()) outboundWorker_.join();
+  if (worker_.joinable()) worker_.join();
 #endif
 }
 
 bool PacketLimiter::available() const { return running_; }
 
 #ifdef TRAFFIC_LIMIT_USE_WINDIVERT
-void PacketLimiter::loop(void* rawHandle, const std::atomic_uint64_t& rate) {
-  const auto handle = static_cast<HANDLE>(rawHandle);
+void PacketLimiter::loop() {
+  const auto handle = static_cast<HANDLE>(handle_);
   char packet[65535];
   UINT length = 0;
   WINDIVERT_ADDRESS address{};
@@ -114,7 +96,8 @@ void PacketLimiter::loop(void* rawHandle, const std::atomic_uint64_t& rate) {
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
       continue;
     }
-    auto wait = pacer.pace(length, rate.load());
+    const auto rate = address.Outbound ? upload_.load() : download_.load();
+    auto wait = pacer.pace(length, rate);
     while (running_ && wait > std::chrono::nanoseconds(0)) {
       const auto chunk = std::chrono::nanoseconds(
           std::min<std::chrono::nanoseconds::rep>(wait.count(), 10'000'000));
