@@ -5,14 +5,16 @@
 #include <chrono>
 #include <thread>
 #include <timeapi.h>
+#include <algorithm>
 
 namespace {
 constexpr UINT kControlPacketBytes = 256;
 
 class PacketPacer {
  public:
-  void pace(UINT length, uint64_t rateBits) {
-    if (rateBits == 0 || length <= kControlPacketBytes) return;
+  // Returns how long to wait before the next packet may be sent (0 = pass).
+  std::chrono::nanoseconds pace(UINT length, uint64_t rateBits) {
+    if (rateBits == 0 || length <= kControlPacketBytes) return std::chrono::nanoseconds(0);
     const auto now = std::chrono::steady_clock::now();
     if (rateBits != rateBits_) {
       rateBits_ = rateBits;
@@ -22,10 +24,11 @@ class PacketPacer {
         (static_cast<uint64_t>(length) * 8'000'000'000ULL) / rateBits);
     if (now >= next_) {
       next_ = now + duration;
-      return;
+      return std::chrono::nanoseconds(0);
     }
-    std::this_thread::sleep_until(next_);
+    const auto wait = next_ - now;
     next_ += duration;
+    return wait;
   }
 
  private:
@@ -80,9 +83,17 @@ void PacketLimiter::stop() {
   const auto outbound = static_cast<HANDLE>(outboundHandle_);
   inboundHandle_ = nullptr;
   outboundHandle_ = nullptr;
+  // Unblock in-flight recv/send so workers exit promptly and the link returns
+  // to full speed without a restart.
+  if (inbound) {
+    ::WinDivertShutdown(inbound, WINDIVERT_SHUTDOWN_BOTH);
+    ::WinDivertClose(inbound);
+  }
+  if (outbound) {
+    ::WinDivertShutdown(outbound, WINDIVERT_SHUTDOWN_BOTH);
+    ::WinDivertClose(outbound);
+  }
   ::timeEndPeriod(1);
-  if (inbound) WinDivertClose(inbound);
-  if (outbound) WinDivertClose(outbound);
   if (inboundWorker_.joinable()) inboundWorker_.join();
   if (outboundWorker_.joinable()) outboundWorker_.join();
 #endif
@@ -103,7 +114,13 @@ void PacketLimiter::loop(void* rawHandle, const std::atomic_uint64_t& rate) {
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
       continue;
     }
-    pacer.pace(length, rate.load());
+    auto wait = pacer.pace(length, rate.load());
+    while (running_ && wait > std::chrono::nanoseconds(0)) {
+      const auto chunk = std::chrono::nanoseconds(
+          std::min<std::chrono::nanoseconds::rep>(wait.count(), 10'000'000));
+      std::this_thread::sleep_for(chunk);
+      wait -= chunk;
+    }
     if (!WinDivertSend(handle, packet, length, nullptr, &address) && running_) {
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
