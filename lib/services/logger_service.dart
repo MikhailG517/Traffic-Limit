@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 
@@ -9,6 +10,8 @@ class LoggerService {
   bool _diagnostics;
   File? _file;
   final List<String> _buffer = [];
+  final List<String> _pending = [];
+  Timer? _flushTimer;
   static const _maxBuffer = 4000;
 
   bool get diagnostics => _diagnostics;
@@ -82,7 +85,37 @@ class LoggerService {
     if (_buffer.length >= _maxBuffer) _buffer.removeAt(0);
     _buffer.add(line);
     if (level == LogLevel.debug && !_diagnostics && !force) return;
-    await _write(line);
+    // Buffer everything in memory and flush periodically; WARN/ERROR flush
+    // immediately so they are never lost.
+    _pending.add(line);
+    if (level == LogLevel.warn || level == LogLevel.error) {
+      await _flushPending();
+    } else {
+      _ensureFlushTimer();
+    }
+  }
+
+  void _ensureFlushTimer() {
+    _flushTimer ??= Timer(const Duration(seconds: 15), () {
+      _flushTimer = null;
+      _flushPending();
+    });
+  }
+
+  Future<void> _flushPending() async {
+    if (_pending.isEmpty) return;
+    final batch = List.of(_pending);
+    _pending.clear();
+    try {
+      await (await _logFile())
+          .writeAsString('${batch.join('\n')}\n', mode: FileMode.append);
+    } catch (_) {}
+  }
+
+  Future<void> flush() async {
+    _flushTimer?.cancel();
+    _flushTimer = null;
+    await _flushPending();
   }
 
   Future<void> debug(String message,
@@ -96,12 +129,6 @@ class LoggerService {
   Future<void> error(String message,
           {Map<String, Object?>? params, Object? error, StackTrace? stack}) =>
       log(LogLevel.error, message, params: params, error: error, stack: stack);
-
-  Future<void> _write(String line) async {
-    try {
-      await (await _logFile()).writeAsString('$line\n', mode: FileMode.append);
-    } catch (_) {}
-  }
 
   Future<String> read() async {
     try {

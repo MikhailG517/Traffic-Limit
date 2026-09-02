@@ -22,7 +22,7 @@ bool TrafficService::run(){
   packetHandle_=WinDivertOpen("tcp or udp",WINDIVERT_LAYER_NETWORK,10,WINDIVERT_FLAG_SNIFF);
   if (flowHandle_ == INVALID_HANDLE_VALUE) flowHandle_ = nullptr;
   if (packetHandle_ == INVALID_HANDLE_VALUE) packetHandle_ = nullptr;
-  driverAvailable_ = flowHandle_ != nullptr && packetHandle_ != nullptr;
+  driverAvailable_ = flowHandle_ != nullptr || packetHandle_ != nullptr;
   if (flowHandle_) { telemetryRunning_ = true; flowWorker_ = std::thread(&TrafficService::flowLoop, this); }
   if (packetHandle_) { telemetryRunning_ = true; packetWorker_ = std::thread(&TrafficService::packetLoop, this); }
 #endif
@@ -65,4 +65,4 @@ void TrafficService::pipeLoop(){while(WaitForSingleObject(stopEvent_,0)==WAIT_TI
 #ifdef TRAFFIC_LIMIT_USE_WINDIVERT
 refreshConnections();
 #endif
-response<<processJson();}else if(strstr(request,"--get-status")){response<<"{\"driver\":"<<(driverAvailable()?"true":"false")<<",\"limiter\":"<<(limiter_.available()?"true":"false")<<"}";}else{response<<"{\"received\":"<<t.received<<",\"sent\":"<<t.sent<<",\"limiter\":"<<(limiter_.available()?"true":"false")<<"}";}auto out=response.str();DWORD written=0;WriteFile(pipe,out.data(),(DWORD)out.size(),&written,nullptr);FlushFileBuffers(pipe);DisconnectNamedPipe(pipe);}CloseHandle(pipe);}}
+response<<processJson();}else if(strstr(request,"--get-status")){response<<"{\"received\":"<<t.received<<",\"sent\":"<<t.sent<<",\"driver\":"<<(driverAvailable()?"true":"false")<<",\"limiter\":"<<(limiter_.available()?"true":"false")<<"}";}else{response<<"{\"received\":"<<t.received<<",\"sent\":"<<t.sent<<",\"limiter\":"<<(limiter_.available()?"true":"false")<<"}";}auto out=response.str();DWORD written=0;WriteFile(pipe,out.data(),(DWORD)out.size(),&written,nullptr);FlushFileBuffers(pipe);DisconnectNamedPipe(pipe);}CloseHandle(pipe);}}

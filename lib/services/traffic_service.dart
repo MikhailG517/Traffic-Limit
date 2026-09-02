@@ -28,8 +28,10 @@ class TrafficService {
   double get todayTotal => _periodTotal(const Duration(days: 1));
   double get weekTotal => _periodTotal(const Duration(days: 7));
   double get monthTotal => _monthlyTotal;
+  DateTime? _sessionStart;
+  DateTime get sessionStart => _sessionStart ?? DateTime.now();
   final Map<String, double> _dailyTotals = {};
-  DateTime? _lastHistorySave;
+  DateTime? _lastStatsSave;
   bool _serviceProbed = false;
 
   String get _servicePath =>
@@ -119,6 +121,7 @@ class TrafficService {
             '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}'))
         .fold<double>(0, (sum, entry) => sum + entry.value);
     // Сессия относится к текущему запуску приложения; суточный журнал хранится отдельно.
+    _sessionStart = DateTime.now();
     _downloadTotal = 0;
     _uploadTotal = 0;
     await _preferences.remove('sessionDownload');
@@ -170,14 +173,10 @@ class TrafficService {
           final sentDelta = max(0, actual.sent - _previous!.sent);
           _downloadTotal += receivedDelta / 1024 / 1024;
           _uploadTotal += sentDelta / 1024 / 1024;
-          await _preferences.setDouble('sessionDownload', _downloadTotal);
-          await _preferences.setDouble('sessionUpload', _uploadTotal);
           final deltaMb = (receivedDelta + sentDelta) / 1024 / 1024;
           _monthlyTotal += deltaMb;
           final key = _dayKey(DateTime.now());
           _dailyTotals[key] = (_dailyTotals[key] ?? 0) + deltaMb;
-          await _preferences.setDouble('monthlyTotal', _monthlyTotal);
-          await _preferences.setString('dailyTotals', jsonEncode(_dailyTotals));
         }
         _previous = actual;
         _previousAt = now;
@@ -192,18 +191,10 @@ class TrafficService {
               : TrafficStatus.active);
       samples.add(TrafficSample(time: now, download: down, upload: up));
       if (samples.length > 525600) samples.removeAt(0);
-      if (_lastHistorySave == null ||
-          now.difference(_lastHistorySave!).inSeconds >= 10) {
-        _lastHistorySave = now;
-        await _preferences.setString(
-            'trafficSamples',
-            jsonEncode(samples
-                .map((item) => {
-                      'time': item.time.toIso8601String(),
-                      'download': item.download,
-                      'upload': item.upload
-                    })
-                .toList()));
+      if (_lastStatsSave == null ||
+          now.difference(_lastStatsSave!).inSeconds >= 30) {
+        _lastStatsSave = now;
+        await _flushStats();
       }
       interfaces
         ..clear()
@@ -297,23 +288,11 @@ class TrafficService {
 
   Future<TrafficTotals?> _readWindowsTotals() async {
     try {
-      const script =
-          r'''$a=Get-NetAdapter -Physical | Where-Object Status -eq 'Up'; $s=$a | Get-NetAdapterStatistics -ErrorAction Stop; $rx=[UInt64](($s | Measure-Object ReceivedBytes -Sum).Sum); $tx=[UInt64](($s | Measure-Object SentBytes -Sum).Sum); Write-Output ("RX=$rx"); Write-Output ("TX=$tx")''';
-      final result = await Process.run('powershell.exe',
-          ['-NoProfile', '-NonInteractive', '-Command', script]);
-      final lines = result.stdout
-          .toString()
-          .trim()
-          .split(RegExp(r'\s+'))
-          .where((e) => e.isNotEmpty)
-          .toList();
-      if (result.exitCode != 0 || lines.length < 2) return null;
-      final received = int.tryParse(lines
-          .firstWhere((line) => line.startsWith('RX='), orElse: () => 'RX=0')
-          .substring(3));
-      final sent = int.tryParse(lines
-          .firstWhere((line) => line.startsWith('TX='), orElse: () => 'TX=0')
-          .substring(3));
+      final text = await _nativeResponse('--get-status');
+      if (text == null) return null;
+      final data = Map<String, dynamic>.from(jsonDecode(text) as Map);
+      final received = (data['received'] as num?)?.toInt();
+      final sent = (data['sent'] as num?)?.toInt();
       if (received == null || sent == null) return null;
       return TrafficTotals(received: received, sent: sent, linkKbit: 500000);
     } catch (e, st) {
@@ -369,6 +348,7 @@ class TrafficService {
   void resetStatistics() {
     samples.clear();
     _previous = null;
+    _sessionStart = DateTime.now();
     _downloadTotal = 0;
     _uploadTotal = 0;
     _monthlyTotal = 0;
@@ -382,7 +362,27 @@ class TrafficService {
     _logger.info('Статистика сброшена пользователем');
   }
 
-  void dispose() => _timer?.cancel();
+  Future<void> _flushStats() async {
+    await _preferences.setDouble('sessionDownload', _downloadTotal);
+    await _preferences.setDouble('sessionUpload', _uploadTotal);
+    await _preferences.setDouble('monthlyTotal', _monthlyTotal);
+    await _preferences.setString('dailyTotals', jsonEncode(_dailyTotals));
+    await _preferences.setString(
+        'trafficSamples',
+        jsonEncode(samples
+            .map((item) => {
+                  'time': item.time.toIso8601String(),
+                  'download': item.download,
+                  'upload': item.upload
+                })
+            .toList()));
+  }
+
+  void dispose() {
+    _timer?.cancel();
+    unawaited(_flushStats());
+  }
+
   Future<bool> setLimitsEnabled(
       bool enabled, double download, double upload) async {
     await _logger.info('Переключение ограничения',

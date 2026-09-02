@@ -54,7 +54,7 @@ class DashboardPage extends StatelessWidget {
                   color: AppColors.green,
                   icon: Icons.download_rounded,
                   subtitle:
-                      '↓ ${formatData(stats.downloadTotal)} · ↑ ${formatData(stats.uploadTotal)}')),
+                      '↓ ${formatData(stats.downloadTotal)} · ↑ ${formatData(stats.uploadTotal)} · с ${_hm(service.sessionStart)}')),
           const SizedBox(width: 16),
           Expanded(
               child: StatCard(
@@ -120,6 +120,9 @@ class DashboardPage extends StatelessWidget {
                         height: 42,
                         child: SpeedSparkline(values: values, color: color))
                   ])));
+  String _hm(DateTime value) =>
+      '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
+
   Widget _interfaces() => SectionCard(
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

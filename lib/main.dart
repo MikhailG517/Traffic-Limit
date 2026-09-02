@@ -20,7 +20,8 @@ Future<void> main() async {
       center: true,
       title: 'Traffic Limit',
       titleBarStyle: TitleBarStyle.hidden,
-      windowButtonVisibility: false);
+      windowButtonVisibility: false,
+      skipTaskbar: true);
   await windowManager.waitUntilReadyToShow(options, () async {
     // Window is created for the tray icon / Flutter view but is hidden on
     // startup; it can be opened from the tray or via the --show flag.
