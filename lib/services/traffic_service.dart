@@ -287,12 +287,27 @@ class TrafficService {
   }
 
   Future<TrafficTotals?> _readWindowsTotals() async {
+    // Only physical adapters are counted so the totals match the provider;
+    // native GetIfTable-style counters would also sum virtual VPN / Hyper-V
+    // adapters and over-report the session volume.
     try {
-      final text = await _nativeResponse('--get-status');
-      if (text == null) return null;
-      final data = Map<String, dynamic>.from(jsonDecode(text) as Map);
-      final received = (data['received'] as num?)?.toInt();
-      final sent = (data['sent'] as num?)?.toInt();
+      const script =
+          r'''$a=Get-NetAdapter -Physical | Where-Object Status -eq 'Up'; $s=$a | Get-NetAdapterStatistics -ErrorAction Stop; $rx=[UInt64](($s | Measure-Object ReceivedBytes -Sum).Sum); $tx=[UInt64](($s | Measure-Object SentBytes -Sum).Sum); Write-Output ("RX=$rx"); Write-Output ("TX=$tx")''';
+      final result = await Process.run('powershell.exe',
+          ['-NoProfile', '-NonInteractive', '-Command', script]);
+      final lines = result.stdout
+          .toString()
+          .trim()
+          .split(RegExp(r'\s+'))
+          .where((e) => e.isNotEmpty)
+          .toList();
+      if (result.exitCode != 0 || lines.length < 2) return null;
+      final received = int.tryParse(lines
+          .firstWhere((line) => line.startsWith('RX='), orElse: () => 'RX=0')
+          .substring(3));
+      final sent = int.tryParse(lines
+          .firstWhere((line) => line.startsWith('TX='), orElse: () => 'TX=0')
+          .substring(3));
       if (received == null || sent == null) return null;
       return TrafficTotals(received: received, sent: sent, linkKbit: 500000);
     } catch (e, st) {
