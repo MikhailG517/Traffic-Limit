@@ -34,7 +34,7 @@ class DashboardPage extends StatelessWidget {
                   formatRate(stats.downloadRate),
                   AppColors.green,
                   Icons.arrow_downward_rounded,
-                  service.samples.map((e) => e.download).toList())),
+                  service.recentSamples(120).map((e) => e.download).toList())),
           const SizedBox(width: 16),
           Expanded(
               child: _trafficCard(
@@ -43,7 +43,7 @@ class DashboardPage extends StatelessWidget {
                   formatRate(stats.uploadRate),
                   AppColors.red,
                   Icons.arrow_upward_rounded,
-                  service.samples.map((e) => e.upload).toList()))
+                  service.recentSamples(120).map((e) => e.upload).toList()))
         ]),
         const SizedBox(height: 18),
         Row(children: [

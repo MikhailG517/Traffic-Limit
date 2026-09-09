@@ -9,10 +9,8 @@ class LoggerService {
 
   bool _diagnostics;
   File? _file;
-  final List<String> _buffer = [];
   final List<String> _pending = [];
   Timer? _flushTimer;
-  static const _maxBuffer = 4000;
 
   bool get diagnostics => _diagnostics;
   void setDiagnostics(bool value) => _diagnostics = value;
@@ -81,10 +79,10 @@ class LoggerService {
       Object? error,
       StackTrace? stack,
       bool force = false}) async {
-    final line = _format(level, message, params, error, stack);
-    if (_buffer.length >= _maxBuffer) _buffer.removeAt(0);
-    _buffer.add(line);
+    // Отбрасываем debug-строки сразу, если диагностика выключена, чтобы не
+    // форматировать и не накапливать их в памяти каждую секунду.
     if (level == LogLevel.debug && !_diagnostics && !force) return;
+    final line = _format(level, message, params, error, stack);
     // Buffer everything in memory and flush periodically; WARN/ERROR flush
     // immediately so they are never lost.
     _pending.add(line);
