@@ -6,7 +6,7 @@
 - Visual Studio 2022 с workload **Desktop development with C++**;
 - Windows 11 SDK и CMake;
 - Inno Setup 6;
-- официальный WinDivert SDK для фактического ограничения.
+- WinDivert 2.2.2 x64 уже включён в `windows/native/TrafficLimitService/third_party/WinDivert/`.
 
 ## Быстрая сборка
 
@@ -22,7 +22,7 @@ flutter build windows --release
 
 ## WinDivert
 
-Положите официальный SDK в `windows/native/TrafficLimitService/third_party/WinDivert/`:
+Официальный WinDivert 2.2.2 x64 уже включён в исходники и установщик. При старте службы библиотека автоматически загружает driver из каталога приложения. Для обновления runtime замените SDK в в `windows/native/TrafficLimitService/third_party/WinDivert/`:
 
 ```text
 third_party/WinDivert/include/WinDivert.h

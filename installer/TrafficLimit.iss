@@ -16,21 +16,56 @@ SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=admin
 ArchitecturesInstallIn64BitMode=x64
+CloseApplications=force
+RestartApplications=no
 SetupIconFile=..\assets\traffic_limit.ico
 UninstallDisplayIcon={app}\traffic_limit.exe
 [Files]
 Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\build\native\TrafficLimitService.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\build\native\WinDivert.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\build\native\WinDivert64.sys"; DestDir: "{app}"; Flags: ignoreversion onlyifdoesntexist
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
 [Tasks]
 Name: "desktopicon"; Description: "Создать ярлык на рабочем столе"; Flags: unchecked
-Name: "autostart"; Description: "Запускать вместе с Windows"; Flags: unchecked
+Name: "autostart"; Description: "Запускать вместе с Windows"
 [Run]
 Filename: "{app}\TrafficLimitService.exe"; Parameters: "--install"; Flags: runhidden waituntilterminated
 Filename: "{app}\{#AppExeName}"; Description: "Запустить Traffic Limit"; Flags: nowait postinstall skipifsilent
 [UninstallRun]
 Filename: "{app}\TrafficLimitService.exe"; Parameters: "--uninstall"; Flags: runhidden waituntilterminated
 [Registry]
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "TrafficLimit"; ValueData: "{app}\{#AppExeName}"; Flags: uninsdeletevalue; Tasks: autostart
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "TrafficLimit"; ValueData: """{app}\{#AppExeName}"" --autostart"; Flags: uninsdeletevalue; Tasks: autostart
+[Code]
+procedure StopRunningComponents;
+var
+  ResultCode: Integer;
+begin
+  Exec(ExpandConstant('{sys}\sc.exe'), 'stop TrafficLimitService', '', SW_HIDE,
+    ewWaitUntilTerminated, ResultCode);
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM traffic_limit.exe', '',
+    SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Sleep(1500);
+  Exec(ExpandConstant('{sys}\taskkill.exe'),
+    '/F /T /IM TrafficLimitService.exe', '', SW_HIDE,
+    ewWaitUntilTerminated, ResultCode);
+  Exec(ExpandConstant('{sys}\sc.exe'), 'stop WinDivert', '', SW_HIDE,
+    ewWaitUntilTerminated, ResultCode);
+  Exec(ExpandConstant('{sys}\sc.exe'), 'delete WinDivert', '', SW_HIDE,
+    ewWaitUntilTerminated, ResultCode);
+  Sleep(1000);
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  StopRunningComponents;
+  Result := '';
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usUninstall then
+    StopRunningComponents;
+end;

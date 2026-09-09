@@ -1,3 +1,33 @@
-#include "traffic_counter.h"
+#include <winsock2.h>
+#include <windows.h>
 #include <iphlpapi.h>
-TrafficTotals TrafficCounter::read() const { MIB_IF_TABLE2* table=nullptr; TrafficTotals totals; if(GetIfTable2(&table)==NO_ERROR){ for(ULONG i=0;i<table->NumEntries;++i){const auto& row=table->Table[i];if(row.Type!=IF_TYPE_SOFTWARE_LOOPBACK){totals.received+=row.InOctets;totals.sent+=row.OutOctets;}} FreeMibTable(table);} return totals; }
+#include <vector>
+#include "traffic_counter.h"
+
+TrafficTotals TrafficCounter::read() const {
+  DWORD size = 0;
+  if (GetIfTable(nullptr, &size, FALSE) != ERROR_INSUFFICIENT_BUFFER) return {};
+  std::vector<std::byte> buffer(size);
+  auto* table = reinterpret_cast<MIB_IFTABLE*>(buffer.data());
+  if (GetIfTable(table, &size, FALSE) != NO_ERROR) return {};
+
+  TrafficTotals totals;
+  for (DWORD i = 0; i < table->dwNumEntries; ++i) {
+    const auto& row = table->table[i];
+    if (row.dwType == MIB_IF_TYPE_LOOPBACK) continue;
+    auto& state = states_[row.dwIndex];
+    if (!state.initialized) {
+      state.receivedTotal = row.dwInOctets;
+      state.sentTotal = row.dwOutOctets;
+      state.initialized = true;
+    } else {
+      state.receivedTotal += static_cast<DWORD>(row.dwInOctets - state.received);
+      state.sentTotal += static_cast<DWORD>(row.dwOutOctets - state.sent);
+    }
+    state.received = row.dwInOctets;
+    state.sent = row.dwOutOctets;
+    totals.received += state.receivedTotal;
+    totals.sent += state.sentTotal;
+  }
+  return totals;
+}

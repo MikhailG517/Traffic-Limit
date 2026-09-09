@@ -8,7 +8,7 @@ class PageShell extends StatelessWidget {
   final Widget child;
   final Widget? action;
   @override
-  Widget build(BuildContext context) => SingleChildScrollView(
+  Widget build(BuildContext context) => Padding(
       padding: const EdgeInsets.fromLTRB(30, 28, 30, 28),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
@@ -16,7 +16,7 @@ class PageShell extends StatelessWidget {
           if (action != null) action!
         ]),
         const SizedBox(height: 22),
-        child
+        Expanded(child: child)
       ]));
 }
 
@@ -41,7 +41,7 @@ class StatCard extends StatelessWidget {
             Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                    color: color.withOpacity(.14),
+                    color: color.withValues(alpha: .14),
                     borderRadius: BorderRadius.circular(12)),
                 child: Icon(icon, color: color, size: 21)),
             const SizedBox(height: 15),
@@ -81,13 +81,13 @@ class LivePill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
       decoration: BoxDecoration(
           color: active
-              ? AppColors.green.withOpacity(.1)
-              : Colors.orange.withOpacity(.1),
+              ? AppColors.green.withValues(alpha: .1)
+              : Colors.orange.withValues(alpha: .1),
           borderRadius: BorderRadius.circular(22),
           border: Border.all(
               color: active
-                  ? AppColors.green.withOpacity(.45)
-                  : Colors.orange.withOpacity(.45))),
+                  ? AppColors.green.withValues(alpha: .45)
+                  : Colors.orange.withValues(alpha: .45))),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(Icons.circle,
             size: 9, color: active ? AppColors.green : Colors.orange),
