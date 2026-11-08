@@ -37,5 +37,5 @@ Future<void> main() async {
       system: SystemSettingsService(),
       traffic: TrafficService(logger, preferences),
       tray: tray,
-      startHidden: true));
+      startHidden: !launch.showWindow));
 }

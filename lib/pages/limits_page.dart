@@ -300,17 +300,13 @@ class _LimitsPageState extends State<LimitsPage> {
                     const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
           ]),
           const SizedBox(height: 14),
-          TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0, end: ratio),
-              duration: const Duration(milliseconds: 800),
-              curve: Curves.easeOutCubic,
-              builder: (context, v, _) => ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                      value: v,
-                      minHeight: 8,
-                      backgroundColor: palette.cardHigh,
-                      valueColor: AlwaysStoppedAnimation(color)))),
+          ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                  value: ratio,
+                  minHeight: 8,
+                  backgroundColor: palette.cardHigh,
+                  valueColor: AlwaysStoppedAnimation(color))),
           const SizedBox(height: 8),
           Text('Использовано ${formatData(usedMb)} · ${(ratio * 100).round()}%',
               style: TextStyle(color: palette.muted, fontSize: 12)),

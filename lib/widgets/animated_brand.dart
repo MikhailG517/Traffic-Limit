@@ -5,64 +5,40 @@ import 'package:flutter/material.dart';
 
 import '../models/traffic_models.dart';
 import '../theme.dart';
+import 'ambient_clock.dart';
 import 'svg_path.dart';
 
-/// Repeating animation clock shared by the decorative painters.
-mixin _Loop<T extends StatefulWidget> on State<T>, TickerProviderStateMixin<T> {
-  late final AnimationController loop;
-  Duration get period;
-
-  @override
-  void initState() {
-    super.initState();
-    loop = AnimationController(vsync: this, duration: period)..repeat();
-  }
-
-  @override
-  void dispose() {
-    loop.dispose();
-    super.dispose();
-  }
-}
+/// Phase in `[0, 1)` of a loop with the given [period] on the ambient clock.
+double ambientPhase(Duration period) =>
+    (AmbientClock.instance.seconds *
+        Duration.microsecondsPerSecond /
+        period.inMicroseconds) %
+    1;
 
 /// Animated brand mark rendered from the SVG path data in [BrandPaths]: the
 /// gauge draws itself, a spark runs along it and the arrows pulse.
-class AnimatedLogo extends StatefulWidget {
+class AnimatedLogo extends StatelessWidget {
   const AnimatedLogo({super.key, this.size = 28, this.animate = true});
   final double size;
   final bool animate;
-  @override
-  State<AnimatedLogo> createState() => _AnimatedLogoState();
-}
-
-class _AnimatedLogoState extends State<AnimatedLogo>
-    with TickerProviderStateMixin, _Loop {
-  @override
-  Duration get period => const Duration(seconds: 4);
-
-  @override
-  void initState() {
-    super.initState();
-    if (!widget.animate) loop.value = .6;
-    if (!widget.animate) loop.stop();
-  }
 
   @override
   Widget build(BuildContext context) => RepaintBoundary(
       child: CustomPaint(
-          size: Size.square(widget.size),
-          painter: _LogoPainter(loop, Palette.of(context))));
+          size: Size.square(size),
+          painter: _LogoPainter(
+              animate ? AmbientClock.instance : null, Palette.of(context))));
 }
 
 class _LogoPainter extends CustomPainter {
-  _LogoPainter(this.t, this.palette) : super(repaint: t);
-  final Animation<double> t;
+  _LogoPainter(this.clock, this.palette) : super(repaint: clock);
+  final Listenable? clock;
   final Palette palette;
 
   @override
   void paint(Canvas canvas, Size size) {
     final s = size.width / BrandPaths.viewBox;
-    final v = t.value;
+    final v = clock == null ? .6 : ambientPhase(const Duration(seconds: 4));
     final rect = Offset.zero & size;
     canvas.drawRRect(
         RRect.fromRectAndRadius(
@@ -100,10 +76,10 @@ class _LogoPainter extends CustomPainter {
           arc,
           Paint()
             ..style = PaintingStyle.stroke
-            ..strokeWidth = stroke * 1.8
+            ..strokeWidth = stroke * 1.9
             ..strokeCap = StrokeCap.round
             ..shader = shader
-            ..maskFilter = MaskFilter.blur(BlurStyle.normal, 2.4 * s));
+            ..color = Colors.white.withValues(alpha: .25));
       canvas.drawPath(
           arc,
           Paint()
@@ -136,12 +112,17 @@ class _LogoPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _LogoPainter old) => old.palette != palette;
+  bool shouldRepaint(covariant _LogoPainter old) =>
+      old.palette != palette || old.clock != clock;
 }
 
 /// Hero panel of the dashboard: a dual speed gauge with glowing arcs whose
 /// sweep follows the current rate, and SVG data streams with particles whose
 /// speed and density follow the traffic.
+///
+/// Two layers keep the GPU cost low: the gauge (blurred glow) repaints only
+/// while the displayed value settles after an update, and the particle layer
+/// runs on the [AmbientClock] without any blur.
 class SpeedCore extends StatefulWidget {
   const SpeedCore(
       {super.key,
@@ -153,73 +134,96 @@ class SpeedCore extends StatefulWidget {
   State<SpeedCore> createState() => _SpeedCoreState();
 }
 
-class _SpeedCoreState extends State<SpeedCore>
-    with TickerProviderStateMixin, _Loop {
-  @override
-  Duration get period => const Duration(seconds: 12);
+class _SpeedCoreState extends State<SpeedCore> {
+  static const _settle = Duration(milliseconds: 120);
+  final _clock = AmbientClock.instance;
+  double _down = 0, _up = 0, _scale = 1000;
+  double _lastSeconds = 0;
+  bool _settling = false;
 
-  late final AnimationController _value = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 900));
-  double _fromDown = 0, _fromUp = 0, _fromScale = 1000;
-
-  double get _scale => _niceScale(math.max(widget.peak, 1000));
+  double get _targetScale => _niceScale(math.max(widget.peak, 1000));
 
   @override
   void initState() {
     super.initState();
-    _value.forward(from: 0);
+    _startSettling();
   }
 
   @override
   void didUpdateWidget(covariant SpeedCore old) {
     super.didUpdateWidget(old);
-    if (old.download == widget.download &&
-        old.upload == widget.upload &&
-        old.peak == widget.peak) {
-      return;
+    if (old.download != widget.download ||
+        old.upload != widget.upload ||
+        old.peak != widget.peak) {
+      _startSettling();
     }
-    final k = Curves.easeOutCubic.transform(_value.value);
-    _fromDown = lerpDouble(_fromDown, old.download, k)!;
-    _fromUp = lerpDouble(_fromUp, old.upload, k)!;
-    _fromScale =
-        lerpDouble(_fromScale, _niceScale(math.max(old.peak, 1000)), k)!;
-    _value.forward(from: 0);
+  }
+
+  void _startSettling() {
+    if (_settling) return;
+    _settling = true;
+    _lastSeconds = _clock.seconds;
+    _clock.addListener(_tick);
+  }
+
+  /// Exponential approach to the target; the listener is removed as soon as
+  /// the values are within 0.5 %, so an idle gauge costs no frames.
+  void _tick() {
+    final now = _clock.seconds;
+    final dt = now - _lastSeconds;
+    _lastSeconds = now;
+    final k = 1 - math.exp(-dt * 1000 / _settle.inMilliseconds);
+    double step(double from, double to) {
+      final next = from + (to - from) * k;
+      return (to - next).abs() <= math.max(to.abs(), 1) * .005 ? to : next;
+    }
+
+    setState(() {
+      _down = step(_down, widget.download);
+      _up = step(_up, widget.upload);
+      _scale = step(_scale, _targetScale);
+    });
+    if (_down == widget.download &&
+        _up == widget.upload &&
+        _scale == _targetScale) {
+      _clock.removeListener(_tick);
+      _settling = false;
+    }
   }
 
   @override
   void dispose() {
-    _value.dispose();
+    if (_settling) _clock.removeListener(_tick);
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final palette = Palette.of(context);
-    return AnimatedBuilder(
-        animation: _value,
-        builder: (context, _) {
-          final k = Curves.easeOutCubic.transform(_value.value);
-          final down = lerpDouble(_fromDown, widget.download, k)!;
-          final up = lerpDouble(_fromUp, widget.upload, k)!;
-          final scale = lerpDouble(_fromScale, _scale, k)!;
-          return RepaintBoundary(
-              child: CustomPaint(
-                  painter: _CorePainter(
-                      loop, palette, down / scale, up / scale, down, up),
-                  child: Center(child: _readout(context, down, up, scale))));
-        });
+    final downRatio = (_down / _scale).clamp(0.0, 1.0);
+    final upRatio = (_up / _scale).clamp(0.0, 1.0);
+    return Stack(fit: StackFit.expand, children: [
+      RepaintBoundary(
+          child: CustomPaint(
+              painter: _FlowPainter(
+                  palette, math.max(widget.download, widget.upload) / _scale))),
+      RepaintBoundary(
+          child: CustomPaint(
+              painter: _GaugePainter(palette, downRatio, upRatio),
+              child: Center(child: _readout(context)))),
+    ]);
   }
 
-  Widget _readout(BuildContext context, double down, double up, double scale) {
+  Widget _readout(BuildContext context) {
     final palette = Palette.of(context);
     return Column(mainAxisSize: MainAxisSize.min, children: [
-      _rate(down, AppColors.download, Icons.south_rounded, 'Загрузка'),
+      _rate(_down, AppColors.download, Icons.south_rounded, 'Загрузка'),
       const SizedBox(height: 10),
       Container(width: 120, height: 1, color: palette.border),
       const SizedBox(height: 10),
-      _rate(up, AppColors.upload, Icons.north_rounded, 'Отдача'),
+      _rate(_up, AppColors.upload, Icons.north_rounded, 'Отдача'),
       const SizedBox(height: 10),
-      Text('шкала ${formatRate(scale)}',
+      Text('шкала ${formatRate(_scale)}',
           style: TextStyle(color: palette.muted, fontSize: 11)),
     ]);
   }
@@ -265,26 +269,24 @@ double _niceScale(double value) {
   return 10 * exponent.toDouble();
 }
 
-class _CorePainter extends CustomPainter {
-  _CorePainter(
-      this.t, this.palette, this.downRatio, this.upRatio, this.down, this.up)
-      : super(repaint: t);
-  final Animation<double> t;
-  final Palette palette;
-  final double downRatio, upRatio, down, up;
+const _sweep = math.pi * 1.5;
+const _start = math.pi * .75;
 
-  static const _sweep = math.pi * 1.5;
-  static const _start = math.pi * .75;
+double _gaugeRadius(Size size) => math.min(size.width, size.height) / 2 - 18;
+
+/// Static part of the gauge: tracks, value arcs with glow and the scale.
+class _GaugePainter extends CustomPainter {
+  _GaugePainter(this.palette, this.downRatio, this.upRatio);
+  final Palette palette;
+  final double downRatio, upRatio;
 
   @override
   void paint(Canvas canvas, Size size) {
-    _streams(canvas, size);
     final center = size.center(Offset.zero);
-    final radius = math.min(size.width, size.height) / 2 - 18;
+    final radius = _gaugeRadius(size);
     _ring(canvas, center, radius, downRatio, AppColors.download, 12);
     _ring(canvas, center, radius - 22, upRatio, AppColors.upload, 8);
     _ticks(canvas, center, radius + 10);
-    _orbit(canvas, center, radius - 40);
   }
 
   void _ring(Canvas canvas, Offset c, double r, double ratio, Color color,
@@ -300,15 +302,8 @@ class _CorePainter extends CustomPainter {
           ..strokeWidth = width
           ..strokeCap = StrokeCap.round
           ..color = palette.cardHigh);
-    final value = ratio.clamp(0.0, 1.0) * _sweep;
+    final value = ratio * _sweep;
     if (value < .002) return;
-    final shader = SweepGradient(
-            startAngle: _start,
-            endAngle: _start + _sweep,
-            colors: [color.withValues(alpha: .35), color, Colors.white],
-            stops: const [0, .8, 1],
-            tileMode: TileMode.clamp)
-        .createShader(rect);
     canvas.drawArc(
         rect,
         _start,
@@ -329,13 +324,18 @@ class _CorePainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeWidth = width
           ..strokeCap = StrokeCap.round
-          ..shader = shader);
+          ..shader = SweepGradient(
+                  startAngle: _start,
+                  endAngle: _start + _sweep,
+                  colors: [color.withValues(alpha: .35), color, Colors.white],
+                  stops: const [0, .8, 1],
+                  tileMode: TileMode.clamp)
+              .createShader(rect));
     final angle = _start + value;
     final tip = c + Offset(math.cos(angle), math.sin(angle)) * r;
-    final pulse = .6 + .4 * math.sin(t.value * 2 * math.pi * 12);
     canvas.drawCircle(
         tip,
-        width * .9 + 3 * pulse,
+        width * 1.3,
         Paint()
           ..color = color.withValues(alpha: .5)
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6));
@@ -355,8 +355,73 @@ class _CorePainter extends CustomPainter {
     }
   }
 
-  void _orbit(Canvas canvas, Offset c, double r) {
-    final spin = t.value * 2 * math.pi;
+  @override
+  bool shouldRepaint(covariant _GaugePainter old) =>
+      old.downRatio != downRatio ||
+      old.upRatio != upRatio ||
+      old.palette != palette;
+}
+
+/// Animated layer: SVG data streams with particles and a slow orbit. No blur:
+/// the soft look comes from a wide low-alpha halo under each particle.
+class _FlowPainter extends CustomPainter {
+  _FlowPainter(this.palette, double activity)
+      : activity = activity.clamp(0.0, 1.0),
+        super(repaint: AmbientClock.instance);
+  final Palette palette;
+  final double activity;
+
+  static Size? _cachedSize;
+  static List<(Path, PathMetric)> _cached = const [];
+
+  static List<(Path, PathMetric)> _streams(Size size) {
+    if (size == _cachedSize) return _cached;
+    final sx = size.width / StreamPaths.width;
+    final sy = size.height * .5 / StreamPaths.height;
+    _cachedSize = size;
+    return _cached = [
+      for (final data in StreamPaths.streams)
+        () {
+          final path =
+              scaledSvgPath(data, sx, sy).shift(Offset(0, size.height * .25));
+          return (path, path.computeMetrics().first);
+        }()
+    ];
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final t = ambientPhase(const Duration(seconds: 12));
+    final streams = _streams(size);
+    for (var i = 0; i < streams.length; i++) {
+      final (path, metric) = streams[i];
+      final color = i == 1 ? AppColors.upload : AppColors.download;
+      canvas.drawPath(
+          path,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.2
+            ..color = color.withValues(alpha: .10 + .12 * activity));
+      final count = 3 + (activity * 6).round();
+      final speed = (i == 1 ? -1 : 1) * (1 + activity * 5);
+      final halo = Paint();
+      final core = Paint();
+      for (var p = 0; p < count; p++) {
+        final phase = (t * speed + p / count + i * .17) % 1;
+        final tangent = metric.getTangentForOffset(metric.length * phase);
+        if (tangent == null) continue;
+        final fade = math.sin(phase * math.pi);
+        halo.color = color.withValues(alpha: .18 * fade * palette.glow);
+        core.color = color.withValues(alpha: .35 + .6 * fade * palette.glow);
+        canvas.drawCircle(tangent.position, 5, halo);
+        canvas.drawCircle(tangent.position, 2, core);
+      }
+    }
+    _orbit(canvas, size.center(Offset.zero), _gaugeRadius(size) - 40, t);
+  }
+
+  void _orbit(Canvas canvas, Offset c, double r, double t) {
+    final spin = t * 2 * math.pi;
     final rect = Rect.fromCircle(center: c, radius: r);
     final paint = Paint()
       ..style = PaintingStyle.stroke
@@ -370,81 +435,36 @@ class _CorePainter extends CustomPainter {
     canvas.drawCircle(dot, 2.5, Paint()..color = AppColors.violet);
   }
 
-  /// SVG streams across the panel; particles travel faster with more traffic.
-  void _streams(Canvas canvas, Size size) {
-    final sx = size.width / StreamPaths.width;
-    final sy = size.height * .5 / StreamPaths.height;
-    final activity = (math.max(downRatio, upRatio)).clamp(0.0, 1.0);
-    canvas.save();
-    canvas.translate(0, size.height * .25);
-    for (var i = 0; i < StreamPaths.streams.length; i++) {
-      final path = scaledSvgPath(StreamPaths.streams[i], sx, sy);
-      final color = i == 1 ? AppColors.upload : AppColors.download;
-      canvas.drawPath(
-          path,
-          Paint()
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1.2
-            ..color = color.withValues(alpha: .10 + .12 * activity));
-      final metric = path.computeMetrics().first;
-      final count = 3 + (activity * 6).round();
-      final speed = (i == 1 ? -1 : 1) * (1 + activity * 5);
-      for (var p = 0; p < count; p++) {
-        final phase = (t.value * speed + p / count + i * .17) % 1;
-        final offset = metric.length * (phase < 0 ? phase + 1 : phase);
-        final tangent = metric.getTangentForOffset(offset);
-        if (tangent == null) continue;
-        final fade = math.sin(((phase < 0 ? phase + 1 : phase)) * math.pi);
-        canvas.drawCircle(
-            tangent.position,
-            2.2,
-            Paint()
-              ..color = color.withValues(alpha: .25 + .6 * fade * palette.glow)
-              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.5));
-      }
-    }
-    canvas.restore();
-  }
-
   @override
-  bool shouldRepaint(covariant _CorePainter old) =>
-      old.downRatio != downRatio ||
-      old.upRatio != upRatio ||
-      old.palette != palette;
+  bool shouldRepaint(covariant _FlowPainter old) =>
+      old.activity != activity || old.palette != palette;
 }
 
-/// Slowly drifting colour blobs behind the whole window.
-class AuroraBackground extends StatefulWidget {
+/// Static colour blobs behind the whole window. Painted once and cached by
+/// the raster cache: a full-window gradient redrawn every frame was the
+/// largest single GPU cost.
+class AuroraBackground extends StatelessWidget {
   const AuroraBackground({super.key, required this.child});
   final Widget child;
-  @override
-  State<AuroraBackground> createState() => _AuroraBackgroundState();
-}
-
-class _AuroraBackgroundState extends State<AuroraBackground>
-    with TickerProviderStateMixin, _Loop {
-  @override
-  Duration get period => const Duration(seconds: 30);
 
   @override
   Widget build(BuildContext context) => Stack(children: [
         Positioned.fill(
             child: RepaintBoundary(
                 child: CustomPaint(
-                    painter: _AuroraPainter(loop, Palette.of(context))))),
-        widget.child,
+                    isComplex: true,
+                    painter: _AuroraPainter(Palette.of(context))))),
+        child,
       ]);
 }
 
 class _AuroraPainter extends CustomPainter {
-  _AuroraPainter(this.t, this.palette) : super(repaint: t);
-  final Animation<double> t;
+  _AuroraPainter(this.palette);
   final Palette palette;
 
   @override
   void paint(Canvas canvas, Size size) {
     canvas.drawRect(Offset.zero & size, Paint()..color = palette.background);
-    final a = t.value * 2 * math.pi;
     void blob(Color color, double x, double y, double r) {
       final c = Offset(size.width * x, size.height * y);
       canvas.drawCircle(
@@ -458,10 +478,9 @@ class _AuroraPainter extends CustomPainter {
     }
 
     final r = size.shortestSide * .55;
-    blob(AppColors.blue, .78 + .08 * math.cos(a), .12 + .06 * math.sin(a), r);
-    blob(AppColors.violet, .15 + .06 * math.sin(a), .9 + .05 * math.cos(a), r);
-    blob(AppColors.cyan, .45 + .1 * math.sin(a + 1), .5 + .08 * math.cos(a),
-        r * .7);
+    blob(AppColors.blue, .84, .14, r);
+    blob(AppColors.violet, .15, .93, r);
+    blob(AppColors.cyan, .5, .55, r * .7);
   }
 
   @override

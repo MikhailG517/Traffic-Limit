@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme.dart';
+import 'ambient_clock.dart';
 
 class PageShell extends StatelessWidget {
   const PageShell(
@@ -149,22 +150,12 @@ class StatCard extends StatelessWidget {
                         letterSpacing: 1.2))),
           ]),
           const SizedBox(height: 14),
-          AnimatedSwitcher(
-              duration: const Duration(milliseconds: 350),
-              transitionBuilder: (child, animation) => FadeTransition(
-                  opacity: animation,
-                  child: SlideTransition(
-                      position:
-                          Tween(begin: const Offset(0, .25), end: Offset.zero)
-                              .animate(animation),
-                      child: child)),
-              child: Text(value,
-                  key: ValueKey(value),
-                  style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -.4,
-                      fontFeatures: [FontFeature.tabularFigures()]))),
+          Text(value,
+              style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -.4,
+                  fontFeatures: [FontFeature.tabularFigures()])),
           if (subtitle != null)
             Padding(
                 padding: const EdgeInsets.only(top: 4),
@@ -193,13 +184,8 @@ class SplitBar extends StatelessWidget {
                 builder: (context, c) => Stack(children: [
                       Container(color: Palette.of(context).cardHigh),
                       if (total > 0) ...[
-                        AnimatedContainer(
-                            duration: const Duration(milliseconds: 500),
-                            width: c.maxWidth,
-                            color: AppColors.upload),
-                        AnimatedContainer(
-                            duration: const Duration(milliseconds: 500),
-                            curve: Curves.easeOutCubic,
+                        Container(width: c.maxWidth, color: AppColors.upload),
+                        Container(
                             width: c.maxWidth * share,
                             color: AppColors.download),
                       ]
@@ -207,29 +193,14 @@ class SplitBar extends StatelessWidget {
   }
 }
 
-class LivePill extends StatefulWidget {
+class LivePill extends StatelessWidget {
   const LivePill({super.key, this.active = true, this.label});
   final bool active;
   final String? label;
-  @override
-  State<LivePill> createState() => _LivePillState();
-}
-
-class _LivePillState extends State<LivePill>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _pulse = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 1600))
-    ..repeat();
-
-  @override
-  void dispose() {
-    _pulse.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
-    final color = widget.active ? AppColors.green : AppColors.amber;
+    final color = active ? AppColors.green : AppColors.amber;
     return Container(
         padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
         decoration: BoxDecoration(
@@ -240,12 +211,10 @@ class _LivePillState extends State<LivePill>
           SizedBox(
               width: 14,
               height: 14,
-              child: AnimatedBuilder(
-                  animation: _pulse,
-                  builder: (context, _) => CustomPaint(
-                      painter: _PulsePainter(_pulse.value, color)))),
+              child: RepaintBoundary(
+                  child: CustomPaint(painter: _PulsePainter(color)))),
           const SizedBox(width: 8),
-          Text(widget.label ?? (widget.active ? 'В ЭФИРЕ' : 'НЕДОСТУПНО'),
+          Text(label ?? (active ? 'В ЭФИРЕ' : 'НЕДОСТУПНО'),
               style: TextStyle(
                   color: color,
                   fontWeight: FontWeight.w800,
@@ -256,11 +225,11 @@ class _LivePillState extends State<LivePill>
 }
 
 class _PulsePainter extends CustomPainter {
-  _PulsePainter(this.t, this.color);
-  final double t;
+  _PulsePainter(this.color) : super(repaint: AmbientClock.instance);
   final Color color;
   @override
   void paint(Canvas canvas, Size size) {
+    final t = (AmbientClock.instance.seconds / 1.6) % 1;
     final c = size.center(Offset.zero);
     canvas.drawCircle(
         c, 3 + 4 * t, Paint()..color = color.withValues(alpha: (1 - t) * .5));
@@ -268,7 +237,7 @@ class _PulsePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _PulsePainter old) => old.t != t;
+  bool shouldRepaint(covariant _PulsePainter old) => old.color != color;
 }
 
 /// Pill-style segmented switch with a sliding highlight.

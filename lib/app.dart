@@ -14,6 +14,7 @@ import 'services/system_settings_service.dart';
 import 'services/traffic_service.dart';
 import 'services/tray_service.dart';
 import 'theme.dart';
+import 'widgets/ambient_clock.dart';
 import 'widgets/animated_brand.dart';
 import 'widgets/common.dart';
 
@@ -50,6 +51,9 @@ class _TrafficLimitAppState extends State<TrafficLimitApp> with WindowListener {
   void initState() {
     super.initState();
     windowManager.addListener(this);
+    // The app starts hidden in the tray; the window events turn the
+    // decorative animations on when it is shown.
+    AmbientClock.instance.setWindowState(visible: !widget.startHidden);
     appSettings = widget.settings.load();
     widget.logger.setDiagnostics(appSettings.diagnostics);
     widget.logger.info('Приложение запущено', params: {
@@ -124,6 +128,21 @@ class _TrafficLimitAppState extends State<TrafficLimitApp> with WindowListener {
   @override
   Future<void> onWindowClose() async {
     await windowManager.hide();
+  }
+
+  @override
+  void onWindowEvent(String eventName) {
+    final clock = AmbientClock.instance;
+    switch (eventName) {
+      case 'show' || 'restore':
+        clock.setWindowState(visible: true);
+      case 'hide' || 'minimize':
+        clock.setWindowState(visible: false);
+      case 'focus':
+        clock.setWindowState(focused: true);
+      case 'blur':
+        clock.setWindowState(focused: false);
+    }
   }
 
   Future<void> _exitApp() async {
@@ -336,13 +355,17 @@ class NavigationRailPanel extends StatelessWidget {
                   child: Row(children: [
                     const AnimatedLogo(size: 38),
                     const SizedBox(width: 12),
-                    Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
+                    Expanded(
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
                           ShaderMask(
                               shaderCallback: (rect) =>
                                   AppColors.brandGradient.createShader(rect),
                               child: const Text('Traffic Limit',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.fade,
+                                  softWrap: false,
                                   style: TextStyle(
                                       color: Colors.white,
                                       fontSize: 17,
@@ -355,7 +378,7 @@ class NavigationRailPanel extends StatelessWidget {
                                       : palette.muted,
                                   fontSize: 11,
                                   fontWeight: FontWeight.w600)),
-                        ]),
+                        ])),
                   ]))),
           SizedBox(
               height: _navItems.length * (_itemHeight + _itemGap),
@@ -451,22 +474,17 @@ class MonthlyUsage extends StatelessWidget {
               SizedBox(
                   width: 52,
                   height: 52,
-                  child: TweenAnimationBuilder<double>(
-                      tween: Tween(begin: 0, end: progress),
-                      duration: const Duration(milliseconds: 900),
-                      curve: Curves.easeOutCubic,
-                      builder: (context, value, _) =>
-                          Stack(alignment: Alignment.center, children: [
-                            CircularProgressIndicator(
-                                value: value,
-                                strokeWidth: 5,
-                                strokeCap: StrokeCap.round,
-                                backgroundColor: palette.cardHigh,
-                                valueColor: AlwaysStoppedAnimation(color)),
-                            Text('${(value * 100).round()}%',
-                                style: const TextStyle(
-                                    fontSize: 11, fontWeight: FontWeight.w800)),
-                          ]))),
+                  child: Stack(alignment: Alignment.center, children: [
+                    CircularProgressIndicator(
+                        value: progress,
+                        strokeWidth: 5,
+                        strokeCap: StrokeCap.round,
+                        backgroundColor: palette.cardHigh,
+                        valueColor: AlwaysStoppedAnimation(color)),
+                    Text('${(progress * 100).round()}%',
+                        style: const TextStyle(
+                            fontSize: 11, fontWeight: FontWeight.w800)),
+                  ])),
               const SizedBox(width: 12),
               Expanded(
                   child: Column(

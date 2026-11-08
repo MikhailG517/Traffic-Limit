@@ -97,7 +97,6 @@ class SpeedLineChart extends StatelessWidget {
           preventCurveOverShooting: true,
           barWidth: 2.4,
           color: color,
-          shadow: Shadow(color: color.withValues(alpha: .6), blurRadius: 10),
           dotData: const FlDotData(show: false),
           belowBarData: BarAreaData(
               show: true,
@@ -110,96 +109,98 @@ class SpeedLineChart extends StatelessWidget {
                   ])));
     }
 
-    return LineChart(
-        duration: Duration.zero,
-        LineChartData(
-          minX: -span,
-          maxX: 0,
-          baselineX: -sinceTick,
-          minY: 0,
-          maxY: maxY,
-          clipData: const FlClipData.all(),
-          gridData: FlGridData(
-              drawVerticalLine: true,
-              horizontalInterval: maxY / 4,
-              verticalInterval: labelStep,
-              getDrawingHorizontalLine: (_) => FlLine(
-                  color: palette.border.withValues(alpha: .7),
-                  strokeWidth: 1,
-                  dashArray: const [4, 4]),
-              getDrawingVerticalLine: (_) => FlLine(
-                  color: palette.border.withValues(alpha: .35),
-                  strokeWidth: 1)),
-          borderData: FlBorderData(show: false),
-          titlesData: FlTitlesData(
-              topTitles:
-                  const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-              rightTitles:
-                  const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-              leftTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 78,
-                      interval: maxY / 4,
-                      getTitlesWidget: (value, meta) =>
-                          value == meta.max || value == 0
-                              ? const SizedBox.shrink()
-                              : Text(formatRate(value),
-                                  style: TextStyle(
-                                      color: palette.muted, fontSize: 10)))),
-              bottomTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 26,
-                      interval: labelStep,
-                      getTitlesWidget: (value, meta) {
-                        if (value == meta.min || value == meta.max) {
-                          return const SizedBox.shrink();
-                        }
-                        final t = now.add(
-                            Duration(milliseconds: (value * 1000).round()));
-                        return SideTitleWidget(
-                            axisSide: meta.axisSide,
-                            space: 6,
-                            child: Text(hhmm(t),
-                                style: TextStyle(
-                                    color: palette.muted, fontSize: 10)));
-                      }))),
-          lineTouchData: LineTouchData(
-              getTouchedSpotIndicator: (bar, indexes) => [
-                    for (final _ in indexes)
-                      TouchedSpotIndicatorData(
-                          FlLine(color: palette.muted, strokeWidth: 1),
-                          FlDotData(
-                              getDotPainter: (spot, _, bar, __) =>
-                                  FlDotCirclePainter(
-                                      radius: 4,
-                                      color: Colors.white,
-                                      strokeWidth: 2,
-                                      strokeColor: bar.color!)))
-                  ],
-              touchTooltipData: LineTouchTooltipData(
-                  getTooltipColor: (_) => palette.cardHigh,
-                  tooltipBorder: BorderSide(color: palette.border),
-                  tooltipRoundedRadius: 12,
-                  maxContentWidth: 220,
-                  fitInsideHorizontally: true,
-                  fitInsideVertically: true,
-                  getTooltipItems: (spots) => [
-                        for (final spot in spots)
-                          LineTooltipItem(
-                              spot.barIndex == 0
-                                  ? '${hhmmss(now.add(Duration(milliseconds: (spot.x * 1000).round())))}\n↓ ${formatRate(spot.y)}'
-                                  : '↑ ${formatRate(spot.y)}',
-                              TextStyle(
-                                  color: spot.barIndex == 0
-                                      ? AppColors.download
-                                      : AppColors.upload,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 12))
-                      ])),
-          lineBarsData: [line(true), line(false)],
-        ));
+    return RepaintBoundary(
+        child: LineChart(
+            duration: Duration.zero,
+            LineChartData(
+              minX: -span,
+              maxX: 0,
+              baselineX: -sinceTick,
+              minY: 0,
+              maxY: maxY,
+              clipData: const FlClipData.all(),
+              gridData: FlGridData(
+                  drawVerticalLine: true,
+                  horizontalInterval: maxY / 4,
+                  verticalInterval: labelStep,
+                  getDrawingHorizontalLine: (_) => FlLine(
+                      color: palette.border.withValues(alpha: .7),
+                      strokeWidth: 1,
+                      dashArray: const [4, 4]),
+                  getDrawingVerticalLine: (_) => FlLine(
+                      color: palette.border.withValues(alpha: .35),
+                      strokeWidth: 1)),
+              borderData: FlBorderData(show: false),
+              titlesData: FlTitlesData(
+                  topTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false)),
+                  leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                          showTitles: true,
+                          reservedSize: 78,
+                          interval: maxY / 4,
+                          getTitlesWidget: (value, meta) =>
+                              value == meta.max || value == 0
+                                  ? const SizedBox.shrink()
+                                  : Text(formatRate(value),
+                                      style: TextStyle(
+                                          color: palette.muted,
+                                          fontSize: 10)))),
+                  bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                          showTitles: true,
+                          reservedSize: 26,
+                          interval: labelStep,
+                          getTitlesWidget: (value, meta) {
+                            if (value == meta.min || value == meta.max) {
+                              return const SizedBox.shrink();
+                            }
+                            final t = now.add(
+                                Duration(milliseconds: (value * 1000).round()));
+                            return SideTitleWidget(
+                                axisSide: meta.axisSide,
+                                space: 6,
+                                child: Text(hhmm(t),
+                                    style: TextStyle(
+                                        color: palette.muted, fontSize: 10)));
+                          }))),
+              lineTouchData: LineTouchData(
+                  getTouchedSpotIndicator: (bar, indexes) => [
+                        for (final _ in indexes)
+                          TouchedSpotIndicatorData(
+                              FlLine(color: palette.muted, strokeWidth: 1),
+                              FlDotData(
+                                  getDotPainter: (spot, _, bar, __) =>
+                                      FlDotCirclePainter(
+                                          radius: 4,
+                                          color: Colors.white,
+                                          strokeWidth: 2,
+                                          strokeColor: bar.color!)))
+                      ],
+                  touchTooltipData: LineTouchTooltipData(
+                      getTooltipColor: (_) => palette.cardHigh,
+                      tooltipBorder: BorderSide(color: palette.border),
+                      tooltipRoundedRadius: 12,
+                      maxContentWidth: 220,
+                      fitInsideHorizontally: true,
+                      fitInsideVertically: true,
+                      getTooltipItems: (spots) => [
+                            for (final spot in spots)
+                              LineTooltipItem(
+                                  spot.barIndex == 0
+                                      ? '${hhmmss(now.add(Duration(milliseconds: (spot.x * 1000).round())))}\n↓ ${formatRate(spot.y)}'
+                                      : '↑ ${formatRate(spot.y)}',
+                                  TextStyle(
+                                      color: spot.barIndex == 0
+                                          ? AppColors.download
+                                          : AppColors.upload,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12))
+                          ])),
+              lineBarsData: [line(true), line(false)],
+            )));
   }
 }
 
@@ -226,115 +227,116 @@ class VolumeBarChart extends StatelessWidget {
     return LayoutBuilder(builder: (context, constraints) {
       final slot = (constraints.maxWidth - 70) / math.max(buckets.length, 1);
       final width = (slot * .62).clamp(3.0, 34.0);
-      return BarChart(
-          swapAnimationDuration: const Duration(milliseconds: 500),
-          BarChartData(
-            maxY: maxY,
-            alignment: BarChartAlignment.spaceAround,
-            gridData: FlGridData(
-                drawVerticalLine: false,
-                horizontalInterval: maxY / 4,
-                getDrawingHorizontalLine: (_) => FlLine(
-                    color: palette.border.withValues(alpha: .7),
-                    strokeWidth: 1,
-                    dashArray: const [4, 4])),
-            borderData: FlBorderData(show: false),
-            titlesData: FlTitlesData(
-                topTitles:
-                    const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                rightTitles:
-                    const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 62,
-                        interval: maxY / 4,
-                        getTitlesWidget: (value, meta) => value == meta.max
-                            ? const SizedBox.shrink()
-                            : Text(value == 0 ? '0' : formatData(value),
-                                style: TextStyle(
-                                    color: palette.muted, fontSize: 10)))),
-                bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 24,
-                        getTitlesWidget: (value, meta) {
-                          final i = value.toInt();
-                          if (i < 0 ||
-                              i >= buckets.length ||
-                              (i % labelEvery != 0 && i != highlight)) {
-                            return const SizedBox.shrink();
-                          }
-                          return Padding(
-                              padding: const EdgeInsets.only(top: 6),
-                              child: Text(label(buckets[i].start),
-                                  style: TextStyle(
-                                      color: i == highlight
-                                          ? palette.text
-                                          : palette.muted,
-                                      fontWeight: i == highlight
-                                          ? FontWeight.w800
-                                          : FontWeight.w500,
-                                      fontSize: 10)));
-                        }))),
-            barTouchData: BarTouchData(
-                touchTooltipData: BarTouchTooltipData(
-                    getTooltipColor: (_) => palette.cardHigh,
-                    tooltipBorder: BorderSide(color: palette.border),
-                    tooltipRoundedRadius: 12,
-                    maxContentWidth: 220,
-                    fitInsideHorizontally: true,
-                    fitInsideVertically: true,
-                    getTooltipItem: (group, _, __, ___) {
-                      final b = buckets[group.x];
-                      return BarTooltipItem(
-                          '${tooltipTitle(b.start)}\n',
-                          TextStyle(
-                              color: palette.text,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 12),
-                          children: [
-                            TextSpan(
-                                text: '↓ ${formatData(b.usage.download)}\n',
-                                style: const TextStyle(
-                                    color: AppColors.download,
-                                    fontWeight: FontWeight.w700)),
-                            TextSpan(
-                                text: '↑ ${formatData(b.usage.upload)}\n',
-                                style: const TextStyle(
-                                    color: AppColors.upload,
-                                    fontWeight: FontWeight.w700)),
-                            TextSpan(
-                                text: 'Всего ${formatData(b.usage.total)}',
-                                style: TextStyle(
-                                    color: palette.muted,
-                                    fontWeight: FontWeight.w600)),
-                          ]);
-                    })),
-            barGroups: [
-              for (var i = 0; i < buckets.length; i++)
-                BarChartGroupData(x: i, barRods: [
-                  BarChartRodData(
-                      toY: buckets[i].usage.total,
-                      width: width,
-                      borderRadius: BorderRadius.vertical(
-                          top: Radius.circular(width / 3)),
-                      color: Colors.transparent,
-                      backDrawRodData: BackgroundBarChartRodData(
-                          show: true,
-                          toY: maxY,
-                          color: i == highlight
-                              ? AppColors.blue.withValues(alpha: .08)
-                              : Colors.transparent),
-                      rodStackItems: [
-                        BarChartRodStackItem(
-                            0, buckets[i].usage.download, AppColors.download),
-                        BarChartRodStackItem(buckets[i].usage.download,
-                            buckets[i].usage.total, AppColors.upload),
-                      ])
-                ])
-            ],
-          ));
+      return RepaintBoundary(
+          child: BarChart(
+              swapAnimationDuration: Duration.zero,
+              BarChartData(
+                maxY: maxY,
+                alignment: BarChartAlignment.spaceAround,
+                gridData: FlGridData(
+                    drawVerticalLine: false,
+                    horizontalInterval: maxY / 4,
+                    getDrawingHorizontalLine: (_) => FlLine(
+                        color: palette.border.withValues(alpha: .7),
+                        strokeWidth: 1,
+                        dashArray: const [4, 4])),
+                borderData: FlBorderData(show: false),
+                titlesData: FlTitlesData(
+                    topTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false)),
+                    rightTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false)),
+                    leftTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 62,
+                            interval: maxY / 4,
+                            getTitlesWidget: (value, meta) => value == meta.max
+                                ? const SizedBox.shrink()
+                                : Text(value == 0 ? '0' : formatData(value),
+                                    style: TextStyle(
+                                        color: palette.muted, fontSize: 10)))),
+                    bottomTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 24,
+                            getTitlesWidget: (value, meta) {
+                              final i = value.toInt();
+                              if (i < 0 ||
+                                  i >= buckets.length ||
+                                  (i % labelEvery != 0 && i != highlight)) {
+                                return const SizedBox.shrink();
+                              }
+                              return Padding(
+                                  padding: const EdgeInsets.only(top: 6),
+                                  child: Text(label(buckets[i].start),
+                                      style: TextStyle(
+                                          color: i == highlight
+                                              ? palette.text
+                                              : palette.muted,
+                                          fontWeight: i == highlight
+                                              ? FontWeight.w800
+                                              : FontWeight.w500,
+                                          fontSize: 10)));
+                            }))),
+                barTouchData: BarTouchData(
+                    touchTooltipData: BarTouchTooltipData(
+                        getTooltipColor: (_) => palette.cardHigh,
+                        tooltipBorder: BorderSide(color: palette.border),
+                        tooltipRoundedRadius: 12,
+                        maxContentWidth: 220,
+                        fitInsideHorizontally: true,
+                        fitInsideVertically: true,
+                        getTooltipItem: (group, _, __, ___) {
+                          final b = buckets[group.x];
+                          return BarTooltipItem(
+                              '${tooltipTitle(b.start)}\n',
+                              TextStyle(
+                                  color: palette.text,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 12),
+                              children: [
+                                TextSpan(
+                                    text: '↓ ${formatData(b.usage.download)}\n',
+                                    style: const TextStyle(
+                                        color: AppColors.download,
+                                        fontWeight: FontWeight.w700)),
+                                TextSpan(
+                                    text: '↑ ${formatData(b.usage.upload)}\n',
+                                    style: const TextStyle(
+                                        color: AppColors.upload,
+                                        fontWeight: FontWeight.w700)),
+                                TextSpan(
+                                    text: 'Всего ${formatData(b.usage.total)}',
+                                    style: TextStyle(
+                                        color: palette.muted,
+                                        fontWeight: FontWeight.w600)),
+                              ]);
+                        })),
+                barGroups: [
+                  for (var i = 0; i < buckets.length; i++)
+                    BarChartGroupData(x: i, barRods: [
+                      BarChartRodData(
+                          toY: buckets[i].usage.total,
+                          width: width,
+                          borderRadius: BorderRadius.vertical(
+                              top: Radius.circular(width / 3)),
+                          color: Colors.transparent,
+                          backDrawRodData: BackgroundBarChartRodData(
+                              show: true,
+                              toY: maxY,
+                              color: i == highlight
+                                  ? AppColors.blue.withValues(alpha: .08)
+                                  : Colors.transparent),
+                          rodStackItems: [
+                            BarChartRodStackItem(0, buckets[i].usage.download,
+                                AppColors.download),
+                            BarChartRodStackItem(buckets[i].usage.download,
+                                buckets[i].usage.total, AppColors.upload),
+                          ])
+                    ])
+                ],
+              )));
     });
   }
 }
