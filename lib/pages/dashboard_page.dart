@@ -1,215 +1,169 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
-import 'package:fl_chart/fl_chart.dart';
+
 import '../models/traffic_models.dart';
 import '../services/traffic_service.dart';
 import '../theme.dart';
+import '../widgets/animated_brand.dart';
 import '../widgets/common.dart';
+import '../widgets/traffic_charts.dart';
 
 class DashboardPage extends StatelessWidget {
   const DashboardPage(
       {super.key,
       required this.stats,
       required this.service,
+      required this.monthlyLimitGb,
       required this.onOpenLimits});
   final TrafficStats stats;
   final TrafficService service;
+  final double monthlyLimitGb;
   final VoidCallback onOpenLimits;
-  @override
-  Widget build(BuildContext context) => PageShell(
-      title: 'Трафик в реальном времени',
-      action: Row(mainAxisSize: MainAxisSize.min, children: [
-        const LivePill(),
-        const SizedBox(width: 12),
-        FilledButton.icon(
-            onPressed: onOpenLimits,
-            icon: const Icon(Icons.speed_rounded, size: 18),
-            label: const Text('Ограничения'))
-      ]),
-      child: Column(children: [
-        Row(children: [
-          Expanded(
-              child: _trafficCard(
-                  context,
-                  'ЗАГРУЗКА',
-                  formatRate(stats.downloadRate),
-                  AppColors.green,
-                  Icons.arrow_downward_rounded,
-                  service.recentSamples(120).map((e) => e.download).toList())),
-          const SizedBox(width: 16),
-          Expanded(
-              child: _trafficCard(
-                  context,
-                  'ОТДАЧА',
-                  formatRate(stats.uploadRate),
-                  AppColors.red,
-                  Icons.arrow_upward_rounded,
-                  service.recentSamples(120).map((e) => e.upload).toList()))
-        ]),
-        const SizedBox(height: 18),
-        Row(children: [
-          Expanded(
-              child: StatCard(
-                  label: 'Сессия',
-                  value: formatData(stats.downloadTotal + stats.uploadTotal),
-                  color: AppColors.green,
-                  icon: Icons.download_rounded,
-                  subtitle:
-                      '↓ ${formatData(stats.downloadTotal)} · ↑ ${formatData(stats.uploadTotal)} · с ${_hm(service.sessionStart)}')),
-          const SizedBox(width: 16),
-          Expanded(
-              child: StatCard(
-                  label: 'Сегодня',
-                  value: formatData(service.todayTotal),
-                  color: AppColors.green,
-                  icon: Icons.today_rounded)),
-          const SizedBox(width: 16),
-          Expanded(
-              child: StatCard(
-                  label: 'Неделя',
-                  value: formatData(service.weekTotal),
-                  color: AppColors.green,
-                  icon: Icons.date_range_rounded)),
-          const SizedBox(width: 16),
-          Expanded(
-              child: StatCard(
-                  label: 'Месяц',
-                  value: formatData(service.monthTotal),
-                  color: AppColors.green,
-                  icon: Icons.calendar_month_rounded)),
-        ]),
-        const SizedBox(height: 18),
-        Expanded(child: _interfaces()),
-        const SizedBox(height: 4),
-      ]));
-  Widget _trafficCard(BuildContext context, String label, String rate,
-          Color color, IconData icon, List<double> values) =>
-      Card(
-          child: Container(
-              height: 195,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  gradient: LinearGradient(colors: [
-                    Theme.of(context).colorScheme.surface,
-                    color.withValues(alpha: .10)
-                  ])),
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(children: [
-                      Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                              color: color.withValues(alpha: .14),
-                              borderRadius: BorderRadius.circular(12)),
-                          child: Icon(icon, color: color)),
-                      const SizedBox(width: 12),
-                      Text(label,
-                          style: const TextStyle(
-                              color: AppColors.muted,
-                              fontWeight: FontWeight.w700))
-                    ]),
-                    const SizedBox(height: 9),
-                    Text(rate,
-                        style: TextStyle(
-                            color: Theme.of(context).colorScheme.onSurface,
-                            fontSize: 30,
-                            fontWeight: FontWeight.w800)),
-                    const Spacer(),
-                    SizedBox(
-                        height: 42,
-                        child: SpeedSparkline(values: values, color: color))
-                  ])));
-  String _hm(DateTime value) =>
-      '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
-
-  Widget _interfaces() => SectionCard(
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Сетевые интерфейсы',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-        const SizedBox(height: 12),
-        ...service.interfaces.map((i) => ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.circle,
-                size: 10,
-                color: i.connected ? AppColors.green : AppColors.muted),
-            title: Text(i.name,
-                style: const TextStyle(fontWeight: FontWeight.w700)),
-            subtitle:
-                Text(i.type, style: const TextStyle(color: AppColors.muted)),
-            trailing: Text(
-                '↓ ${formatRate(i.download)}  ↑ ${formatRate(i.upload)}',
-                style: const TextStyle(color: AppColors.green, fontSize: 12))))
-      ]));
-}
-
-class SpeedSparkline extends StatelessWidget {
-  const SpeedSparkline({super.key, required this.values, required this.color});
-  final List<double> values;
-  final Color color;
 
   @override
   Widget build(BuildContext context) {
-    final points = values.isEmpty
-        ? [const FlSpot(0, 0)]
-        : [
-            for (var i = 0; i < values.length; i++)
-              FlSpot(i.toDouble(), values[i])
-          ];
-    final maximum =
-        points.fold<double>(1, (max, point) => point.y > max ? point.y : max);
-    return LineChart(LineChartData(
-      minY: 0,
-      maxY: maximum * 1.15,
-      gridData: const FlGridData(show: false),
-      titlesData: const FlTitlesData(show: false),
-      borderData: FlBorderData(show: false),
-      lineTouchData: const LineTouchData(enabled: false),
-      lineBarsData: [
-        LineChartBarData(
-          spots: points,
-          isCurved: true,
-          curveSmoothness: .25,
+    final now = service.clock();
+    final month = service.month;
+    final live = service.speedSamples(const Duration(minutes: 5));
+    final peak = math.max(TrafficService.peakFromSamples(live, download: true),
+        TrafficService.peakFromSamples(live, download: false));
+    final limitMb = monthlyLimitGb * 1024;
+    return PageShell(
+        title: 'Обзор',
+        subtitle: 'Сессия с ${hhmm(service.sessionStart)} · '
+            '↓ ${formatData(stats.downloadTotal)} · ↑ ${formatData(stats.uploadTotal)}',
+        action: Row(mainAxisSize: MainAxisSize.min, children: [
+          LivePill(active: stats.status == TrafficStatus.active),
+          const SizedBox(width: 12),
+          FilledButton.icon(
+              onPressed: onOpenLimits,
+              icon: const Icon(Icons.speed_rounded, size: 18),
+              label: const Text('Ограничения'))
+        ]),
+        child: Column(children: [
+          Expanded(
+              flex: 11,
+              child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(
+                        width: 330,
+                        child: GlassCard(
+                            accent: AppColors.cyan,
+                            padding: const EdgeInsets.all(8),
+                            child: SpeedCore(
+                                download: stats.downloadRate,
+                                upload: stats.uploadRate,
+                                peak: peak))),
+                    const SizedBox(width: 16),
+                    Expanded(
+                        child: GlassCard(
+                            child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                          const SectionTitle('Скорость за 5 минут',
+                              trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    LegendDot(
+                                        color: AppColors.download,
+                                        text: 'Загрузка'),
+                                    SizedBox(width: 16),
+                                    LegendDot(
+                                        color: AppColors.upload,
+                                        text: 'Отдача'),
+                                  ])),
+                          const SizedBox(height: 14),
+                          Expanded(
+                              child: SpeedLineChart(
+                                  samples: live,
+                                  window: const Duration(minutes: 5),
+                                  now: now)),
+                        ]))),
+                  ])),
+          const SizedBox(height: 16),
+          Row(children: [
+            Expanded(
+                child: _usage('Сегодня', service.today, Icons.today_rounded,
+                    AppColors.cyan, 'с 00:00, ${_date(now)}')),
+            const SizedBox(width: 16),
+            Expanded(
+                child: _usage(
+                    'Вчера',
+                    service.yesterday,
+                    Icons.history_rounded,
+                    AppColors.lightBlue,
+                    _date(DateTime(now.year, now.month, now.day - 1)))),
+            const SizedBox(width: 16),
+            Expanded(
+                child: _usage(
+                    'Неделя',
+                    service.week,
+                    Icons.date_range_rounded,
+                    AppColors.violet,
+                    'с пн, ${_date(TrafficLedger.startOfWeek(now))}')),
+            const SizedBox(width: 16),
+            Expanded(
+                child: _usage(
+                    'Месяц',
+                    month,
+                    Icons.calendar_month_rounded,
+                    limitMb > 0 && month.total >= limitMb
+                        ? AppColors.red
+                        : AppColors.green,
+                    limitMb > 0
+                        ? '${(month.total / limitMb * 100).clamp(0, 999).toStringAsFixed(0)}% из ${monthlyLimitGb.toStringAsFixed(0)} ГБ'
+                        : 'с 1-го числа')),
+          ]),
+          const SizedBox(height: 16),
+          Expanded(
+              flex: 7,
+              child: GlassCard(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    SectionTitle('Сегодня по часам',
+                        trailing: Flexible(
+                            child: Text(
+                                service.interfaces.isEmpty
+                                    ? ''
+                                    : service.interfaces.first.type,
+                                style: TextStyle(
+                                    color: Palette.of(context).muted,
+                                    fontSize: 12),
+                                overflow: TextOverflow.ellipsis))),
+                    const SizedBox(height: 12),
+                    Expanded(
+                        child: VolumeBarChart(
+                            buckets: service.ledger.hoursOf(now),
+                            highlight: now.hour,
+                            labelEvery: 3,
+                            label: (t) => _two(t.hour),
+                            tooltipTitle: (t) =>
+                                '${_two(t.hour)}:00–${_two((t.hour + 1) % 24)}:00')),
+                  ]))),
+        ]));
+  }
+
+  Widget _usage(String label, Usage usage, IconData icon, Color color,
+          String subtitle) =>
+      StatCard(
+          label: label,
+          value: formatData(usage.total),
+          icon: icon,
           color: color,
-          barWidth: 2,
-          dotData: const FlDotData(show: false),
-          belowBarData:
-              BarAreaData(show: true, color: color.withValues(alpha: .12)),
-        )
-      ],
-    ));
-  }
-}
+          subtitle: subtitle,
+          footer:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            SplitBar(download: usage.download, upload: usage.upload),
+            const SizedBox(height: 8),
+            Text(
+                '↓ ${formatData(usage.download)}   ↑ ${formatData(usage.upload)}',
+                style:
+                    const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+          ]));
 
-class SparklinePainter extends CustomPainter {
-  SparklinePainter(this.values, this.color);
-  final List<double> values;
-  final Color color;
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (values.length < 2) return;
-    final maxValue = values.reduce((a, b) => a > b ? a : b);
-    final minValue = values.reduce((a, b) => a < b ? a : b);
-    final path = Path();
-    for (var i = 0; i < values.length; i++) {
-      final x = size.width * i / (values.length - 1);
-      final y = size.height -
-          (values[i] - minValue) /
-              (maxValue - minValue + 1) *
-              size.height *
-              .75 -
-          size.height * .1;
-      i == 0 ? path.moveTo(x, y) : path.lineTo(x, y);
-    }
-    canvas.drawPath(
-        path,
-        Paint()
-          ..color = color
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2.2);
-  }
-
-  @override
-  bool shouldRepaint(covariant SparklinePainter old) => old.values != values;
+  static String _two(int v) => v.toString().padLeft(2, '0');
+  static String _date(DateTime t) => '${_two(t.day)}.${_two(t.month)}';
 }

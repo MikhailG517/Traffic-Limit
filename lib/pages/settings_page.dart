@@ -32,95 +32,105 @@ class SettingsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) => PageShell(
       title: 'Настройки',
-      child: SectionCard(
-          child: Column(children: [
-        ToggleRow(
-            title: 'Запускать вместе с системой',
-            description:
-                'Запись создаётся в реестре Windows для текущего пользователя',
-            value: settings.autostart,
-            onChanged: (value) => _autostart(context, value)),
-        const Divider(color: AppColors.border),
-        ToggleRow(
-            title: 'Показывать скорость в трее',
-            description:
-                'Tooltip иконки в системном трее обновляется каждую секунду',
-            value: settings.traySpeed,
-            onChanged: (value) =>
-                onChanged(settings.copyWith(traySpeed: value))),
-        const Divider(color: AppColors.border),
-        ToggleRow(
-            title: 'Уведомления о лимитах',
-            description: 'Показывать предупреждение при достижении лимита',
-            value: settings.limitNotifications,
-            onChanged: (value) =>
-                onChanged(settings.copyWith(limitNotifications: value))),
-        const Divider(color: AppColors.border),
-        ToggleRow(
-            title: 'Диагностика',
-            description:
-                'Подробное логирование запуска, трея, лимита и скорости приложений',
-            value: settings.diagnostics,
-            onChanged: (value) =>
-                onChanged(settings.copyWith(diagnostics: value))),
-        const Divider(color: AppColors.border),
-        Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Row(children: [
-              const Expanded(
-                  child: Text('Журнал приложения',
-                      style: TextStyle(fontWeight: FontWeight.w700))),
-              OutlinedButton.icon(
-                  onPressed: () => logger.openLogFolder(),
-                  icon: const Icon(Icons.folder_open_rounded, size: 18),
-                  label: const Text('Папка с логами')),
-              const SizedBox(width: 8),
-              OutlinedButton.icon(
-                  onPressed: () async {
-                    final path = await logger.export();
-                    if (path.isNotEmpty && context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Лог сохранён: $path')));
-                    }
-                  },
-                  icon: const Icon(Icons.save_alt_rounded, size: 18),
-                  label: const Text('Экспорт')),
-            ])),
-        const Divider(color: AppColors.border),
-        Padding(
-            padding: const EdgeInsets.only(top: 15),
-            child: Row(children: [
-              const Expanded(
-                  child: Text('Завершение приложения',
-                      style: TextStyle(fontWeight: FontWeight.w700))),
-              OutlinedButton.icon(
-                  onPressed: onExit,
-                  icon: const Icon(Icons.power_settings_new_rounded),
-                  label: const Text('Завершить')),
-            ])),
-        Padding(
-            padding: const EdgeInsets.symmetric(vertical: 15),
-            child: Row(children: [
-              const Expanded(
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                    Text('Тема оформления',
-                        style: TextStyle(fontWeight: FontWeight.w700)),
-                    SizedBox(height: 4),
-                    Text('Применяется немедленно и сохраняется',
-                        style: TextStyle(color: AppColors.muted, fontSize: 13))
-                  ])),
-              SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(value: 'dark', label: Text('Тёмная')),
-                    ButtonSegment(value: 'light', label: Text('Светлая'))
-                  ],
-                  selected: {
-                    settings.themeMode
-                  },
-                  onSelectionChanged: (value) =>
-                      onChanged(settings.copyWith(themeMode: value.first)))
-            ])),
-      ])));
+      subtitle: 'Запуск, трей, журнал и оформление',
+      child: SingleChildScrollView(
+          child: GlassCard(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              child: Column(children: [
+                ToggleRow(
+                    icon: Icons.power_rounded,
+                    title: 'Запускать вместе с системой',
+                    description:
+                        'Запись создаётся в реестре Windows для текущего пользователя',
+                    value: settings.autostart,
+                    onChanged: (value) => _autostart(context, value)),
+                Divider(color: Palette.of(context).border, height: 1),
+                ToggleRow(
+                    icon: Icons.swap_vert_rounded,
+                    title: 'Показывать скорость в трее',
+                    description:
+                        'Tooltip иконки в системном трее обновляется каждую секунду',
+                    value: settings.traySpeed,
+                    onChanged: (value) =>
+                        onChanged(settings.copyWith(traySpeed: value))),
+                Divider(color: Palette.of(context).border, height: 1),
+                ToggleRow(
+                    icon: Icons.notifications_active_rounded,
+                    title: 'Уведомления о лимитах',
+                    description:
+                        'Показывать предупреждение при достижении лимита',
+                    value: settings.limitNotifications,
+                    onChanged: (value) => onChanged(
+                        settings.copyWith(limitNotifications: value))),
+                Divider(color: Palette.of(context).border, height: 1),
+                ToggleRow(
+                    icon: Icons.bug_report_rounded,
+                    title: 'Диагностика',
+                    description:
+                        'Подробное логирование запуска, трея, лимита и скорости приложений',
+                    value: settings.diagnostics,
+                    onChanged: (value) =>
+                        onChanged(settings.copyWith(diagnostics: value))),
+                Divider(color: Palette.of(context).border, height: 1),
+                Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: Row(children: [
+                      const Expanded(
+                          child: Text('Журнал приложения',
+                              style: TextStyle(fontWeight: FontWeight.w700))),
+                      OutlinedButton.icon(
+                          onPressed: () => logger.openLogFolder(),
+                          icon: const Icon(Icons.folder_open_rounded, size: 18),
+                          label: const Text('Папка с логами')),
+                      const SizedBox(width: 8),
+                      OutlinedButton.icon(
+                          onPressed: () async {
+                            final path = await logger.export();
+                            if (path.isNotEmpty && context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                      content: Text('Лог сохранён: $path')));
+                            }
+                          },
+                          icon: const Icon(Icons.save_alt_rounded, size: 18),
+                          label: const Text('Экспорт')),
+                    ])),
+                Divider(color: Palette.of(context).border, height: 1),
+                Padding(
+                    padding: const EdgeInsets.only(top: 15),
+                    child: Row(children: [
+                      const Expanded(
+                          child: Text('Завершение приложения',
+                              style: TextStyle(fontWeight: FontWeight.w700))),
+                      OutlinedButton.icon(
+                          onPressed: onExit,
+                          icon: const Icon(Icons.power_settings_new_rounded),
+                          label: const Text('Завершить')),
+                    ])),
+                Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    child: Row(children: [
+                      const IconBadge(
+                          icon: Icons.palette_rounded, color: AppColors.violet),
+                      const SizedBox(width: 14),
+                      Expanded(
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                            const Text('Тема оформления',
+                                style: TextStyle(fontWeight: FontWeight.w700)),
+                            const SizedBox(height: 3),
+                            Text('Применяется немедленно и сохраняется',
+                                style: TextStyle(
+                                    color: Palette.of(context).muted,
+                                    fontSize: 13))
+                          ])),
+                      PillTabs<String>(
+                          values: const ['dark', 'light'],
+                          selected: settings.themeMode,
+                          label: (v) => v == 'dark' ? 'Тёмная' : 'Светлая',
+                          onChanged: (v) =>
+                              onChanged(settings.copyWith(themeMode: v)))
+                    ])),
+              ]))));
 }

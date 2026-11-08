@@ -80,8 +80,13 @@ class TrayService with TrayListener {
           ? 'Traffic Limit · ↓ ${formatRate(download)} · ↑ ${formatRate(upload)}'
           : 'Traffic Limit');
 
+  static Future<void> showWindow() async {
+    await windowManager.show();
+    await windowManager.focus();
+  }
+
   @override
-  void onTrayIconMouseDown() => unawaited(windowManager.show());
+  void onTrayIconMouseDown() => unawaited(showWindow());
 
   @override
   void onTrayIconRightMouseDown() => unawaited(trayManager.popUpContextMenu());
@@ -90,7 +95,7 @@ class TrayService with TrayListener {
   void onTrayMenuItemClick(MenuItem menuItem) {
     switch (menuItem.key) {
       case 'show':
-        unawaited(windowManager.show());
+        unawaited(showWindow());
       case 'enable-limits':
         unawaited(onEnableLimitsCallback?.call());
       case 'disable-limits':

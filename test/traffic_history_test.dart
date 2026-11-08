@@ -8,7 +8,8 @@ void main() {
         upload: seconds.toDouble() * 2,
       );
 
-  test('keeps a bounded recent buffer and pushes older samples into history', () {
+  test('keeps a bounded recent buffer and pushes older samples into history',
+      () {
     final history = TrafficHistory(recentLimit: 10, historyLimit: 20);
     // 100 points, well beyond recentLimit + historyLimit.
     for (var i = 0; i < 100; i++) {

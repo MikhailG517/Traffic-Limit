@@ -17,6 +17,11 @@ struct ExistingWindowSearch {
 
 BOOL CALLBACK FindExistingWindow(HWND window, LPARAM parameter) {
   auto* search = reinterpret_cast<ExistingWindowSearch*>(parameter);
+  // The process also owns top-level IME windows; only the runner window can
+  // be restored.
+  wchar_t class_name[64]{};
+  GetClassNameW(window, class_name, 64);
+  if (wcscmp(class_name, L"FLUTTER_RUNNER_WIN32_WINDOW") != 0) return TRUE;
   DWORD process_id = 0;
   GetWindowThreadProcessId(window, &process_id);
   HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, process_id);

@@ -1,9 +1,23 @@
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+
 import '../models/traffic_models.dart';
 import '../services/traffic_service.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/traffic_charts.dart';
+
+const _months = [
+  'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', //
+  'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+];
+const _monthsShort = [
+  'янв', 'фев', 'мар', 'апр', 'май', 'июн', //
+  'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'
+];
+const _weekdays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+
+String _two(int v) => v.toString().padLeft(2, '0');
+String _date(DateTime t) => '${_two(t.day)}.${_two(t.month)}';
 
 class GraphsPage extends StatefulWidget {
   const GraphsPage({super.key, required this.traffic, required this.stats});
@@ -15,13 +29,12 @@ class GraphsPage extends StatefulWidget {
 }
 
 class _GraphsPageState extends State<GraphsPage> {
-  HistoryPeriod period = HistoryPeriod.hour;
+  SpeedWindow window = SpeedWindow.fiveMinutes;
+  VolumePeriod period = VolumePeriod.day;
 
-  String title(HistoryPeriod value) => switch (value) {
-        HistoryPeriod.hour => '1 час',
-        HistoryPeriod.week => 'Неделя',
-        HistoryPeriod.month => 'Месяц',
-        HistoryPeriod.year => 'Год'
+  Duration get _window => switch (window) {
+        SpeedWindow.fiveMinutes => const Duration(minutes: 5),
+        SpeedWindow.hour => const Duration(hours: 1),
       };
 
   Future<void> reset() async {
@@ -30,18 +43,21 @@ class _GraphsPageState extends State<GraphsPage> {
             builder: (context) => AlertDialog(
                     title: const Text('Сбросить статистику?'),
                     content: const Text(
-                        'История трафика и объёмы текущей сессии будут удалены. Это действие нельзя отменить.'),
+                        'Журнал объёмов по часам и дням, история скорости и счётчики сессии будут удалены. Это действие нельзя отменить.'),
                     actions: [
                       TextButton(
                           onPressed: () => Navigator.pop(context, false),
                           child: const Text('Отмена')),
                       FilledButton(
+                          style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.red),
                           onPressed: () => Navigator.pop(context, true),
                           child: const Text('Сбросить'))
                     ])) ??
         false;
     if (!confirmed || !mounted) return;
-    widget.traffic.resetStatistics();
+    await widget.traffic.resetStatistics();
+    if (!mounted) return;
     setState(() {});
     ScaffoldMessenger.of(context)
         .showSnackBar(const SnackBar(content: Text('Статистика сброшена')));
@@ -49,183 +65,177 @@ class _GraphsPageState extends State<GraphsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final values = widget.traffic.samplesFor(period);
-    final peakDownload = widget.traffic.peakFor(period, download: true);
-    final peakUpload = widget.traffic.peakFor(period, download: false);
+    final traffic = widget.traffic;
+    final now = traffic.clock();
+    final samples = traffic.speedSamples(_window);
+    final peakDown = TrafficService.peakFromSamples(samples, download: true);
+    final peakUp = TrafficService.peakFromSamples(samples, download: false);
+    final volume = _volume(now);
+    final total =
+        volume.buckets.fold<Usage>(const Usage(), (s, b) => s + b.usage);
     return PageShell(
         title: 'Графики',
-        action: Row(mainAxisSize: MainAxisSize.min, children: [
-          for (final value in HistoryPeriod.values)
-            Padding(
-                padding: const EdgeInsets.only(left: 6),
-                child: ChoiceChip(
-                    label: Text(title(value)),
-                    selected: period == value,
-                    onSelected: (_) => setState(() => period = value))),
-          const SizedBox(width: 10),
-          IconButton(
-              tooltip: 'Сбросить статистику',
-              onPressed: reset,
-              icon: const Icon(Icons.restart_alt_rounded))
-        ]),
+        subtitle: 'Скорость — с реальной шкалой времени, объём — по календарю',
+        action: IconButton.outlined(
+            tooltip: 'Сбросить статистику',
+            onPressed: reset,
+            icon: const Icon(Icons.restart_alt_rounded)),
         child: Column(children: [
           Expanded(
-              child: SectionCard(
+              child: GlassCard(
+                  accent: AppColors.cyan,
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                Text('История: ${title(period)}',
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 12),
-                Expanded(
-                    child: values.length < 2
-                        ? const Center(
-                            child: Text(
-                                'Недостаточно накопленной истории для этого периода',
-                                style: TextStyle(color: AppColors.muted)))
-                        : SpeedChart(values: values)),
-                const SizedBox(height: 10),
-                const Row(children: [
-                  LegendDot(color: AppColors.green, text: 'Загрузка'),
-                  SizedBox(width: 20),
-                  LegendDot(color: AppColors.red, text: 'Отдача')
-                ])
-              ]))),
+                        SectionTitle('Скорость',
+                            trailing: PillTabs<SpeedWindow>(
+                                values: SpeedWindow.values,
+                                selected: window,
+                                label: (v) => switch (v) {
+                                      SpeedWindow.fiveMinutes => '5 минут',
+                                      SpeedWindow.hour => '1 час',
+                                    },
+                                onChanged: (v) => setState(() => window = v))),
+                        const SizedBox(height: 8),
+                        Row(children: [
+                          _figure(
+                              'Сейчас ↓',
+                              formatRate(widget.stats.downloadRate),
+                              AppColors.download),
+                          _figure(
+                              'Сейчас ↑',
+                              formatRate(widget.stats.uploadRate),
+                              AppColors.upload),
+                          _figure('Пик ↓', formatRate(peakDown),
+                              AppColors.download),
+                          _figure(
+                              'Пик ↑', formatRate(peakUp), AppColors.upload),
+                        ]),
+                        const SizedBox(height: 10),
+                        Expanded(
+                            child: samples.length < 2
+                                ? _empty('Скорость появится через пару секунд')
+                                : SpeedLineChart(
+                                    samples: samples,
+                                    window: _window,
+                                    now: now)),
+                      ]))),
           const SizedBox(height: 16),
-          Row(children: [
-            Expanded(
-                child: StatCard(
-                    label: 'Пик загрузки',
-                    value: formatRate(peakDownload),
-                    color: AppColors.green,
-                    icon: Icons.arrow_downward_rounded,
-                    subtitle: title(period))),
-            const SizedBox(width: 16),
-            Expanded(
-                child: StatCard(
-                    label: 'Пик отдачи',
-                    value: formatRate(peakUpload),
-                    color: AppColors.red,
-                    icon: Icons.arrow_upward_rounded,
-                    subtitle: title(period)))
-          ])
+          Expanded(
+              child: GlassCard(
+                  accent: AppColors.violet,
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SectionTitle('Объём трафика · ${volume.title}',
+                            trailing: PillTabs<VolumePeriod>(
+                                values: VolumePeriod.values,
+                                selected: period,
+                                label: (v) => switch (v) {
+                                      VolumePeriod.day => 'Сутки',
+                                      VolumePeriod.week => 'Неделя',
+                                      VolumePeriod.month => 'Месяц',
+                                      VolumePeriod.year => 'Год',
+                                    },
+                                onChanged: (v) => setState(() => period = v))),
+                        const SizedBox(height: 8),
+                        Row(children: [
+                          _figure('Всего', formatData(total.total),
+                              AppColors.violet),
+                          _figure('Загрузка', formatData(total.download),
+                              AppColors.download),
+                          _figure('Отдача', formatData(total.upload),
+                              AppColors.upload),
+                          const Spacer(),
+                          const LegendDot(
+                              color: AppColors.download, text: 'Загрузка'),
+                          const SizedBox(width: 16),
+                          const LegendDot(
+                              color: AppColors.upload, text: 'Отдача'),
+                        ]),
+                        const SizedBox(height: 10),
+                        Expanded(
+                            child: total.total <= 0
+                                ? _empty('За этот период трафик ещё не учтён')
+                                : VolumeBarChart(
+                                    buckets: volume.buckets,
+                                    highlight: volume.current,
+                                    labelEvery: volume.labelEvery,
+                                    label: volume.label,
+                                    tooltipTitle: volume.tooltip)),
+                      ]))),
         ]));
   }
-}
 
-class SpeedChart extends StatelessWidget {
-  const SpeedChart({super.key, required this.values});
-  final List<TrafficSample> values;
-
-  @override
-  Widget build(BuildContext context) {
-    final maxValue = values.fold<double>(
-        1,
-        (peak, value) => [peak, value.download, value.upload]
-            .reduce((a, b) => a > b ? a : b));
-    final axisColor =
-        Theme.of(context).colorScheme.onSurface.withValues(alpha: .62);
-    final gridColor = Theme.of(context).dividerColor.withValues(alpha: .5);
-    return LineChart(LineChartData(
-      minX: 0,
-      maxX: (values.length - 1).toDouble(),
-      minY: 0,
-      maxY: maxValue * 1.15,
-      clipData: const FlClipData.all(),
-      gridData: FlGridData(
-          show: true,
-          drawVerticalLine: false,
-          horizontalInterval: maxValue / 4,
-          getDrawingHorizontalLine: (_) =>
-              FlLine(color: gridColor, strokeWidth: 1)),
-      borderData: FlBorderData(show: false),
-      titlesData: FlTitlesData(
-          topTitles:
-              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles:
-              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          leftTitles: AxisTitles(
-              axisNameWidget: const Text('Скорость, кбит/с'),
-              axisNameSize: 30,
-              sideTitles: SideTitles(
-                  showTitles: true,
-                  reservedSize: 56,
-                  interval: maxValue / 4,
-                  getTitlesWidget: (value, _) => Text(formatRate(value),
-                      style: TextStyle(color: axisColor, fontSize: 10)))),
-          bottomTitles: AxisTitles(
-              axisNameWidget: const Text('Время'),
-              axisNameSize: 24,
-              sideTitles: SideTitles(
-                  showTitles: true,
-                  reservedSize: 28,
-                  interval: _bottomInterval,
-                  getTitlesWidget: (value, _) {
-                    final index = value.round().clamp(0, values.length - 1);
-                    return Text(_time(values[index].time),
-                        style: TextStyle(color: axisColor, fontSize: 10));
-                  }))),
-      lineTouchData: LineTouchData(
-          enabled: true,
-          touchTooltipData: LineTouchTooltipData(
-              getTooltipItems: (spots) => spots.map((spot) {
-                    final sample = values[spot.spotIndex];
-                    final isDownload = spot.barIndex == 0;
-                    return LineTooltipItem(
-                        '${_time(sample.time)}\n${isDownload ? 'Загрузка' : 'Отдача'}: ${formatRate(spot.y)}',
-                        TextStyle(
-                            color: isDownload ? AppColors.green : AppColors.red,
-                            fontWeight: FontWeight.w700));
-                  }).toList())),
-      lineBarsData: [
-        _line(values, true, AppColors.green),
-        _line(values, false, AppColors.red)
-      ],
-    ));
+  _Volume _volume(DateTime now) {
+    final ledger = widget.traffic.ledger;
+    return switch (period) {
+      VolumePeriod.day => _Volume(
+          'сегодня по часам',
+          ledger.hoursOf(now),
+          now.hour,
+          3,
+          (t) => _two(t.hour),
+          (t) =>
+              '${_date(t)}, ${_two(t.hour)}:00–${_two((t.hour + 1) % 24)}:00'),
+      VolumePeriod.week => _Volume(
+          'с ${_date(TrafficLedger.startOfWeek(now))}',
+          ledger.daysOfWeek(now),
+          now.weekday - 1,
+          1,
+          (t) => _weekdays[t.weekday - 1],
+          (t) => '${_weekdays[t.weekday - 1]}, ${_date(t)}'),
+      VolumePeriod.month => _Volume(
+          '${_months[now.month - 1].toLowerCase()} ${now.year}',
+          ledger.daysOfMonth(now),
+          now.day - 1,
+          3,
+          (t) => '${t.day}',
+          (t) => '${t.day} ${_monthsShort[t.month - 1]}'),
+      VolumePeriod.year => _Volume(
+          '${now.year} год',
+          ledger.monthsOfYear(now),
+          now.month - 1,
+          1,
+          (t) => _monthsShort[t.month - 1],
+          (t) => '${_months[t.month - 1]} ${t.year}'),
+    };
   }
 
-  double get _bottomInterval =>
-      values.length <= 6 ? 1 : (values.length / 5).ceilToDouble();
+  Widget _figure(String label, String value, Color color) => Padding(
+      padding: const EdgeInsets.only(right: 28),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label.toUpperCase(),
+            style: TextStyle(
+                color: Palette.of(context).muted,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1)),
+        const SizedBox(height: 2),
+        Text(value,
+            style: TextStyle(
+                color: color,
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+                fontFeatures: const [FontFeature.tabularFigures()])),
+      ]));
 
-  static String _time(DateTime value) =>
-      '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
-
-  LineChartBarData _line(
-          List<TrafficSample> data, bool download, Color color) =>
-      LineChartBarData(
-          spots: [
-            for (var i = 0; i < data.length; i++)
-              FlSpot(i.toDouble(), download ? data[i].download : data[i].upload)
-          ],
-          isCurved: true,
-          curveSmoothness: .22,
-          color: color,
-          barWidth: 2.4,
-          dotData: const FlDotData(show: false),
-          belowBarData:
-              BarAreaData(show: true, color: color.withValues(alpha: .08)));
+  Widget _empty(String text) => Center(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Icon(Icons.insights_rounded,
+            size: 36, color: Palette.of(context).border),
+        const SizedBox(height: 8),
+        Text(text, style: TextStyle(color: Palette.of(context).muted)),
+      ]));
 }
 
-class LegendDot extends StatelessWidget {
-  const LegendDot({super.key, required this.color, required this.text});
-  final Color color;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) =>
-      Row(mainAxisSize: MainAxisSize.min, children: [
-        Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(
-                color: color, borderRadius: BorderRadius.circular(3))),
-        const SizedBox(width: 7),
-        Text(text,
-            style: TextStyle(
-                color: Theme.of(context)
-                    .colorScheme
-                    .onSurface
-                    .withValues(alpha: .65)))
-      ]);
+class _Volume {
+  const _Volume(this.title, this.buckets, this.current, this.labelEvery,
+      this.label, this.tooltip);
+  final String title;
+  final List<UsageBucket> buckets;
+  final int current;
+  final int labelEvery;
+  final String Function(DateTime) label;
+  final String Function(DateTime) tooltip;
 }

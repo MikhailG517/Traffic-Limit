@@ -22,15 +22,10 @@ Future<void> main() async {
       titleBarStyle: TitleBarStyle.hidden,
       windowButtonVisibility: false,
       skipTaskbar: true);
+  // The native runner never shows the window by itself (flutter_window.cpp),
+  // so the app starts in the tray unless --show is passed.
   await windowManager.waitUntilReadyToShow(options, () async {
-    // Window is created for the tray icon / Flutter view but is hidden on
-    // startup; it can be opened from the tray or via the --show flag.
-    if (launch.showWindow) {
-      await windowManager.show();
-      await windowManager.focus();
-    } else {
-      await windowManager.hide();
-    }
+    if (launch.showWindow) await TrayService.showWindow();
   });
   await windowManager.setPreventClose(true);
   final preferences = await SharedPreferences.getInstance();

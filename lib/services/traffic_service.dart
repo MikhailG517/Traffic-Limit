@@ -15,9 +15,10 @@ class TrafficService {
   final SharedPreferences _preferences;
   Timer? _timer;
   bool _busy = false;
-  TrafficTotals? _previous;
+  final Map<String, AdapterCounters> _baseline = {};
   DateTime? _previousAt;
   final history = TrafficHistory();
+  final ledger = TrafficLedger();
   DateTime? _lastProcessesAt;
   DateTime? _lastTotalsAt;
   DateTime? _lastUiUpdateAt;
@@ -28,26 +29,28 @@ class TrafficService {
   final processes = <ProcessTraffic>[];
   double _downloadTotal = 0;
   double _uploadTotal = 0;
-  double _monthlyTotal = 0;
-  static const _dataVersion = 3;
-  double get monthlyTotal => _monthlyTotal;
-  double get todayTotal => _periodTotal(const Duration(days: 1));
-  double get weekTotal => _periodTotal(const Duration(days: 7));
-  double get monthTotal => _monthlyTotal;
+  static const _dataVersion = 4;
+  static const _ledgerKey = 'trafficLedger';
+  DateTime Function() clock = DateTime.now;
+
+  Usage get today => ledger.today(clock());
+  Usage get yesterday => ledger.yesterday(clock());
+  Usage get week => ledger.week(clock());
+  Usage get month => ledger.month(clock());
+  double get monthlyTotal => month.total;
   DateTime? _sessionStart;
-  DateTime get sessionStart => _sessionStart ?? DateTime.now();
-  final Map<String, double> _dailyTotals = {};
+  DateTime get sessionStart => _sessionStart ?? clock();
   DateTime? _lastStatsSave;
   bool _serviceProbed = false;
 
-  /// Snapshot of all retained samples (bounded). Older layout kept an unbounded
-  /// list capped only at 525,600 entries which grew the heap and produced a huge
-  /// JSON blob on every persist.
-  List<TrafficSample> get samples => history.points;
-
-  /// Only the most recent [count] samples — used by the dashboard sparkline so
-  /// it does not copy the whole history on every rebuild.
-  List<TrafficSample> recentSamples(int count) => history.recent(count);
+  /// Speed samples of the last [window], oldest first.
+  List<TrafficSample> speedSamples(Duration window) {
+    final since = clock().subtract(window);
+    return history
+        .recent(window.inSeconds + 1)
+        .where((sample) => sample.time.isAfter(since))
+        .toList();
+  }
 
   String get _servicePath =>
       '${File(Platform.resolvedExecutable).parent.path}${Platform.pathSeparator}TrafficLimitService.exe';
@@ -101,48 +104,11 @@ class TrafficService {
     } catch (_) {}
   }
 
-  String _dayKey(DateTime value) =>
-      '${value.year}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
-  double _periodTotal(Duration period) {
-    final since = DateTime.now().subtract(period);
-    return _dailyTotals.entries.fold(0, (sum, item) {
-      final parts = item.key.split('-').map(int.parse).toList();
-      final date = DateTime(parts[0], parts[1], parts[2]);
-      return sum +
-          (date.isAfter(since.subtract(const Duration(days: 1)))
-              ? item.value
-              : 0);
-    });
-  }
-
   Future<void> start(void Function() onUpdate) async {
-    if ((_preferences.getInt('trafficDataVersion') ?? 0) != _dataVersion) {
-      await _preferences.remove('dailyTotals');
-      await _preferences.remove('trafficSamples');
-      await _preferences.remove('monthlyTotal');
-      await _preferences.remove('sessionDownload');
-      await _preferences.remove('sessionUpload');
-      await _preferences.setInt('trafficDataVersion', _dataVersion);
-    }
-    final encoded = _preferences.getString('dailyTotals');
-    if (encoded != null) {
-      for (final entry
-          in (jsonDecode(encoded) as Map<String, dynamic>).entries) {
-        _dailyTotals[entry.key] = (entry.value as num).toDouble();
-      }
-    }
-    _monthlyTotal = _dailyTotals.entries
-        .where((entry) => entry.key.startsWith(
-            '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}'))
-        .fold<double>(0, (sum, entry) => sum + entry.value);
-    // Сессия относится к текущему запуску приложения; суточный журнал хранится отдельно.
-    _sessionStart = DateTime.now();
+    _loadLedger();
+    _sessionStart = clock();
     _downloadTotal = 0;
     _uploadTotal = 0;
-    await _preferences.remove('sessionDownload');
-    await _preferences.remove('sessionUpload');
-    await _preferences.setDouble('monthlyTotal', _monthlyTotal);
-    await _restoreSamples();
     await ensureService();
     _logger.info('Запуск мониторинга сетевых интерфейсов');
     _timer =
@@ -150,67 +116,79 @@ class TrafficService {
     onUpdate();
   }
 
+  void _loadLedger() {
+    final version = _preferences.getInt('trafficDataVersion') ?? 0;
+    final encoded = _preferences.getString(_ledgerKey);
+    try {
+      if (version == _dataVersion && encoded != null) {
+        ledger.loadJson(jsonDecode(encoded) as Map<String, dynamic>);
+      } else if (version == 3) {
+        final legacy = _preferences.getString('dailyTotals');
+        if (legacy != null) {
+          ledger.importLegacyDaily(jsonDecode(legacy) as Map<String, dynamic>);
+        }
+      }
+    } catch (e) {
+      ledger.clear();
+      _logger.error('Журнал трафика повреждён, начат заново', error: e);
+    }
+    for (final key in const [
+      'dailyTotals',
+      'trafficSamples',
+      'monthlyTotal',
+      'sessionDownload',
+      'sessionUpload'
+    ]) {
+      _preferences.remove(key);
+    }
+    _preferences.setInt('trafficDataVersion', _dataVersion);
+  }
+
+  /// Books one counter reading: updates the session, the calendar ledger and
+  /// the speed history. Exposed for tests.
+  void recordCounters(Map<String, AdapterCounters> current, DateTime now) {
+    final delta = counterDelta(_baseline, current);
+    _baseline.addAll(current);
+    final previousAt = _previousAt;
+    _previousAt = now;
+    if (previousAt == null) return;
+    final elapsed = now.difference(previousAt);
+    _lastDown = rateKbit(
+        currentBytes: delta.received, previousBytes: 0, elapsed: elapsed);
+    _lastUp =
+        rateKbit(currentBytes: delta.sent, previousBytes: 0, elapsed: elapsed);
+    final downMb = delta.received / 1024 / 1024;
+    final upMb = delta.sent / 1024 / 1024;
+    _downloadTotal += downMb;
+    _uploadTotal += upMb;
+    ledger.add(now, download: downMb, upload: upMb);
+  }
+
   Future<void> _sample(void Function() onUpdate) async {
     if (_busy) return;
     _busy = true;
     try {
-      final now = DateTime.now();
+      final now = clock();
       // Самый тяжёлый источник ЦПУ — запуск powershell.exe ради счётчиков
-      // интерфейсов. Считываем его не чаще раза в 2 секунды, а в промежуточные
-      // секунды удерживаем последнюю скорость, чтобы виджет оставался плавным.
-      const totalsInterval = Duration(seconds: 2);
+      // интерфейсов, поэтому он выполняется не чаще раза в 2 секунды.
       final shouldRead = _lastTotalsAt == null ||
-          now.difference(_lastTotalsAt!) >= totalsInterval;
-      TrafficTotals? actual;
+          now.difference(_lastTotalsAt!) >= const Duration(seconds: 2);
+      Map<String, AdapterCounters>? actual;
       if (shouldRead) {
-        actual = Platform.isWindows ? await _readWindowsTotals() : null;
+        actual = Platform.isWindows ? await _readWindowsCounters() : null;
         _lastTotalsAt = now;
-      }
-      double down;
-      double up;
-      if (actual != null) {
-        final elapsed = _previousAt == null
-            ? totalsInterval
-            : now.difference(_previousAt!);
-        down = _previous == null
-            ? 0
-            : rateKbit(
-                currentBytes: actual.received,
-                previousBytes: _previous!.received,
-                elapsed: elapsed);
-        up = _previous == null
-            ? 0
-            : rateKbit(
-                currentBytes: actual.sent,
-                previousBytes: _previous!.sent,
-                elapsed: elapsed);
-        _lastDown = down;
-        _lastUp = up;
-        if (_previous != null) {
-          final receivedDelta = max(0, actual.received - _previous!.received);
-          final sentDelta = max(0, actual.sent - _previous!.sent);
-          _downloadTotal += receivedDelta / 1024 / 1024;
-          _uploadTotal += sentDelta / 1024 / 1024;
-          final deltaMb = (receivedDelta + sentDelta) / 1024 / 1024;
-          _monthlyTotal += deltaMb;
-          final key = _dayKey(DateTime.now());
-          _dailyTotals[key] = (_dailyTotals[key] ?? 0) + deltaMb;
-        }
-        _previous = actual;
-        _previousAt = now;
-      } else {
-        down = _lastDown;
-        up = _lastUp;
+        if (actual != null) recordCounters(actual, now);
       }
       stats = TrafficStats(
-          downloadRate: down,
-          uploadRate: up,
+          downloadRate: _lastDown,
+          uploadRate: _lastUp,
           downloadTotal: _downloadTotal,
           uploadTotal: _uploadTotal,
-          status: actual == null && !Platform.isWindows
-              ? TrafficStatus.unavailable
-              : TrafficStatus.active);
-      history.add(TrafficSample(time: now, download: down, upload: up));
+          status: Platform.isWindows
+              ? TrafficStatus.active
+              : TrafficStatus.unavailable);
+      history
+          .add(TrafficSample(time: now, download: _lastDown, upload: _lastUp));
       if (_lastStatsSave == null ||
           now.difference(_lastStatsSave!).inSeconds >= 60) {
         _lastStatsSave = now;
@@ -219,14 +197,16 @@ class TrafficService {
       interfaces
         ..clear()
         ..add(NetworkInterfaceInfo(
-            name: 'Все активные интерфейсы',
-            type: Platform.isWindows
-                ? 'Windows Network Statistics'
-                : 'Ожидание Windows',
-            download: down,
-            upload: up));
+            name: 'Физические адаптеры',
+            type: _baseline.isEmpty
+                ? (Platform.isWindows
+                    ? 'Нет активных адаптеров'
+                    : 'Ожидание Windows')
+                : _baseline.keys.join(', '),
+            download: _lastDown,
+            upload: _lastUp));
       // Чтение процессов (PowerShell + нативная служба) самое дорогое, поэтому
-      // выполняем его реже, чем интерфейсные счётчики, и не чаще раза в 5 секунд.
+      // выполняем его не чаще раза в 5 секунд.
       if (_lastProcessesAt == null ||
           now.difference(_lastProcessesAt!).inSeconds >= 5) {
         _lastProcessesAt = now;
@@ -235,14 +215,12 @@ class TrafficService {
           ..addAll(await _readWindowsProcesses());
       }
       await _logger.debug('Обновление показателей', params: {
-        'down_kbit': down.round(),
-        'up_kbit': up.round(),
+        'down_kbit': _lastDown.round(),
+        'up_kbit': _lastUp.round(),
         'processes': processes.length
       });
-      // Пересборку интерфейса тоже делаем не чаще раза в 2 секунды: это вторая по
-      // стоимости операция на UI-потоке (полная перестройка MaterialApp и графиков).
       if (_lastUiUpdateAt == null ||
-          now.difference(_lastUiUpdateAt!) >= const Duration(seconds: 2)) {
+          now.difference(_lastUiUpdateAt!) >= const Duration(seconds: 1)) {
         _lastUiUpdateAt = now;
         onUpdate();
       }
@@ -263,12 +241,11 @@ class TrafficService {
     }
   }
 
-  Future<TrafficTotals?> _readWindowsTotals() async {
+  Future<Map<String, AdapterCounters>?> _readWindowsCounters() async {
     // Only physical adapters are counted so the totals match the provider;
-    // native GetIfTable-style counters would also sum virtual VPN / Hyper-V
-    // adapters and over-report the session volume.
+    // virtual VPN / Hyper-V adapters would count the same bytes twice.
     try {
-      return await Isolate.run(_readWindowsTotalsIsolate);
+      return await Isolate.run(_readWindowsCountersIsolate);
     } catch (e, st) {
       await _logger.error('Не удалось прочитать счётчики Windows',
           error: e, stack: st);
@@ -276,30 +253,18 @@ class TrafficService {
     }
   }
 
-  static const String _totalsScript = r'''$a=Get-NetAdapter -Physical | Where-Object Status -eq 'Up'; $s=$a | Get-NetAdapterStatistics -ErrorAction Stop; $rx=[UInt64](($s | Measure-Object ReceivedBytes -Sum).Sum); $tx=[UInt64](($s | Measure-Object SentBytes -Sum).Sum); Write-Output ("RX=$rx"); Write-Output ("TX=$tx")''';
+  static const String _countersScript =
+      r'''Get-NetAdapter -Physical | Where-Object Status -eq 'Up' | Get-NetAdapterStatistics -ErrorAction Stop | ForEach-Object { Write-Output ("$($_.InterfaceDescription)|$($_.ReceivedBytes)|$($_.SentBytes)") }''';
 
-  static const String _processesScript = r'''$connections=@(); $connections += Get-NetTCPConnection -State Established -ErrorAction SilentlyContinue; $connections += Get-NetUDPEndpoint -ErrorAction SilentlyContinue; $connections | Group-Object OwningProcess | ForEach-Object { $id=[int]$_.Name; try { $name=(Get-Process -Id $id -ErrorAction Stop).ProcessName + '.exe' } catch { $name='PID ' + $id }; Write-Output ("$id|$name|$($_.Count)") }''';
+  static const String _processesScript =
+      r'''$connections=@(); $connections += Get-NetTCPConnection -State Established -ErrorAction SilentlyContinue; $connections += Get-NetUDPEndpoint -ErrorAction SilentlyContinue; $connections | Group-Object OwningProcess | ForEach-Object { $id=[int]$_.Name; try { $name=(Get-Process -Id $id -ErrorAction Stop).ProcessName + '.exe' } catch { $name='PID ' + $id }; Write-Output ("$id|$name|$($_.Count)") }''';
 
-  /// Reads interface totals inside a short-lived background isolate so the heavy
-  /// PowerShell spawn and output parsing do not allocate on the UI isolate.
-  static Future<TrafficTotals?> _readWindowsTotalsIsolate() async {
+  static Future<Map<String, AdapterCounters>?>
+      _readWindowsCountersIsolate() async {
     final result = await Process.run('powershell.exe',
-        ['-NoProfile', '-NonInteractive', '-Command', _totalsScript]);
-    final lines = result.stdout
-        .toString()
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((e) => e.isNotEmpty)
-        .toList();
-    if (result.exitCode != 0 || lines.length < 2) return null;
-    final received = int.tryParse(lines
-        .firstWhere((line) => line.startsWith('RX='), orElse: () => 'RX=0')
-        .substring(3));
-    final sent = int.tryParse(lines
-        .firstWhere((line) => line.startsWith('TX='), orElse: () => 'TX=0')
-        .substring(3));
-    if (received == null || sent == null) return null;
-    return TrafficTotals(received: received, sent: sent, linkKbit: 500000);
+        ['-NoProfile', '-NonInteractive', '-Command', _countersScript]);
+    if (result.exitCode != 0) return null;
+    return parseAdapterCounters(result.stdout.toString());
   }
 
   /// Reads per-process connection + byte counters inside a background isolate.
@@ -376,19 +341,6 @@ class TrafficService {
     }
   }
 
-  double peakFor(HistoryPeriod period, {required bool download}) {
-    final window = switch (period) {
-      HistoryPeriod.hour => const Duration(hours: 1),
-      HistoryPeriod.week => const Duration(days: 7),
-      HistoryPeriod.month => const Duration(days: 30),
-      HistoryPeriod.year => const Duration(days: 365),
-    };
-    final since = DateTime.now().subtract(window);
-    return peakFromSamples(
-        samples.where((sample) => sample.time.isAfter(since)).toList(),
-        download: download);
-  }
-
   static double peakFromSamples(List<TrafficSample> points,
       {required bool download}) {
     if (points.isEmpty) return 0;
@@ -398,101 +350,28 @@ class TrafficService {
             max(peak, download ? sample.download : sample.upload));
   }
 
-  List<TrafficSample> samplesFor(HistoryPeriod period) {
-    final window = switch (period) {
-      HistoryPeriod.hour => const Duration(hours: 1),
-      HistoryPeriod.week => const Duration(days: 7),
-      HistoryPeriod.month => const Duration(days: 30),
-      HistoryPeriod.year => const Duration(days: 365),
-    };
-    final since = DateTime.now().subtract(window);
-    final source =
-        samples.where((sample) => sample.time.isAfter(since)).toList();
-    final maxPoints = switch (period) {
-      HistoryPeriod.hour => 120,
-      HistoryPeriod.week => 168,
-      HistoryPeriod.month => 180,
-      HistoryPeriod.year => 365,
-    };
-    if (source.length <= maxPoints) return source;
-    final step = (source.length / maxPoints).ceil();
-    return [for (var i = 0; i < source.length; i += step) source[i]];
-  }
-
-  void resetStatistics() {
+  Future<void> resetStatistics() async {
     history.clear();
-    _previous = null;
-    _sessionStart = DateTime.now();
+    ledger.clear();
+    _sessionStart = clock();
     _downloadTotal = 0;
     _uploadTotal = 0;
-    _monthlyTotal = 0;
-    _dailyTotals.clear();
-    _preferences.setDouble('monthlyTotal', 0);
-    _preferences.remove('sessionDownload');
-    _preferences.remove('sessionUpload');
-    _preferences.remove('dailyTotals');
-    _preferences.remove('trafficSamples');
+    _lastDown = 0;
+    _lastUp = 0;
     stats = const TrafficStats();
-    _logger.info('Статистика сброшена пользователем');
-  }
-
-  Future<void> _restoreSamples() async {
-    final savedSamples = _preferences.getString('trafficSamples');
-    if (savedSamples == null) return;
-    // Очень большой (старый) blob сам по себе занимает десятки МБ в памяти
-    // SharedPreferences; при превышении порога отбрасываем его целиком.
-    if (savedSamples.length > 4 * 1024 * 1024) {
-      await _preferences.remove('trafficSamples');
-      await _logger.warn('История графиков слишком велика, сброшена');
-      return;
-    }
-    try {
-      history.addAll((jsonDecode(savedSamples) as List<dynamic>).map((item) =>
-          TrafficSample(
-              time: DateTime.parse(item['time'] as String),
-              download: (item['download'] as num).toDouble(),
-              upload: (item['upload'] as num).toDouble())));
-    } catch (_) {
-      await _logger.error('Не удалось восстановить историю графиков');
-    }
+    await _preferences.remove(_ledgerKey);
+    await _logger.info('Статистика сброшена пользователем');
   }
 
   Future<void> _flushStats() async {
-    _pruneDailyTotals();
-    await _preferences.setDouble('sessionDownload', _downloadTotal);
-    await _preferences.setDouble('sessionUpload', _uploadTotal);
-    await _preferences.setDouble('monthlyTotal', _monthlyTotal);
-    await _preferences.setString('dailyTotals', jsonEncode(_dailyTotals));
-    await _preferences.setString(
-        'trafficSamples',
-        jsonEncode(history.points
-            .map((item) => {
-                  'time': item.time.toIso8601String(),
-                  'download': item.download,
-                  'upload': item.upload
-                })
-            .toList()));
+    ledger.prune(clock());
+    await _preferences.setString(_ledgerKey, jsonEncode(ledger.toJson()));
   }
 
-  /// Держит суточный журнал ограниченным: выбрасывает записи старше ~400 дней,
-  /// чтобы карта не росла бесконечно и её JSON оставался маленьким.
-  void _pruneDailyTotals() {
-    final cutoff = DateTime.now().subtract(const Duration(days: 400));
-    final stale = <String>[];
-    _dailyTotals.forEach((key, _) {
-      final parts = key.split('-').map(int.parse).toList();
-      if (parts.length != 3) return;
-      final date = DateTime(parts[0], parts[1], parts[2]);
-      if (date.isBefore(cutoff)) stale.add(key);
-    });
-    for (final key in stale) {
-      _dailyTotals.remove(key);
-    }
-  }
-
-  void dispose() {
+  Future<void> dispose() async {
     _timer?.cancel();
-    unawaited(_flushStats());
+    _timer = null;
+    await _flushStats();
   }
 
   Future<bool> setLimitsEnabled(
@@ -529,12 +408,4 @@ class TrafficService {
         params: {'ok': ok, 'response': text});
     return ok;
   }
-}
-
-class TrafficTotals {
-  const TrafficTotals(
-      {required this.received, required this.sent, required this.linkKbit});
-  final int received;
-  final int sent;
-  final double linkKbit;
 }

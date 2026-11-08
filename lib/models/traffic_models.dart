@@ -1,6 +1,8 @@
 enum TrafficStatus { active, unavailable, error }
 
-enum HistoryPeriod { hour, week, month, year }
+enum SpeedWindow { fiveMinutes, hour }
+
+enum VolumePeriod { day, week, month, year }
 
 class TrafficSample {
   const TrafficSample(
@@ -90,6 +92,158 @@ class TrafficHistory {
     _history
       ..clear()
       ..addAll(kept.reversed.toList());
+  }
+}
+
+/// Volume in megabytes (MiB), split by direction.
+class Usage {
+  const Usage({this.download = 0, this.upload = 0});
+  final double download;
+  final double upload;
+  double get total => download + upload;
+
+  Usage operator +(Usage other) =>
+      Usage(download: download + other.download, upload: upload + other.upload);
+
+  Map<String, double> toJson() => {'d': download, 'u': upload};
+  static Usage fromJson(Object? value) {
+    final map = value as Map<String, dynamic>;
+    return Usage(
+        download: (map['d'] as num?)?.toDouble() ?? 0,
+        upload: (map['u'] as num?)?.toDouble() ?? 0);
+  }
+}
+
+/// One bar of a volume chart: [start] of the bucket and its usage.
+class UsageBucket {
+  const UsageBucket(this.start, this.usage);
+  final DateTime start;
+  final Usage usage;
+}
+
+/// Calendar ledger of transferred volume in local time.
+///
+/// Hours are kept for [hourRetention] (today/yesterday by hour, recent week),
+/// days for [dayRetention] (week, month and year views). Periods are calendar
+/// based: "today" starts at local midnight, the week starts on Monday and the
+/// month on the 1st, so the numbers match the operator's billing period.
+class TrafficLedger {
+  TrafficLedger(
+      {this.hourRetention = const Duration(days: 8),
+      this.dayRetention = const Duration(days: 400)});
+
+  final Duration hourRetention;
+  final Duration dayRetention;
+  final Map<String, Usage> _hours = {};
+  final Map<String, Usage> _days = {};
+
+  bool get isEmpty => _days.isEmpty;
+
+  static String dayKey(DateTime t) =>
+      '${t.year}-${_two(t.month)}-${_two(t.day)}';
+  static String hourKey(DateTime t) => '${dayKey(t)}T${_two(t.hour)}';
+  static String _two(int value) => value.toString().padLeft(2, '0');
+
+  static DateTime startOfDay(DateTime t) => DateTime(t.year, t.month, t.day);
+  static DateTime startOfWeek(DateTime t) =>
+      DateTime(t.year, t.month, t.day - (t.weekday - DateTime.monday));
+  static DateTime startOfMonth(DateTime t) => DateTime(t.year, t.month);
+
+  void add(DateTime at, {required double download, required double upload}) {
+    if (download <= 0 && upload <= 0) return;
+    final delta = Usage(download: download, upload: upload);
+    _hours.update(hourKey(at), (v) => v + delta, ifAbsent: () => delta);
+    _days.update(dayKey(at), (v) => v + delta, ifAbsent: () => delta);
+  }
+
+  Usage day(DateTime day) => _days[dayKey(day)] ?? const Usage();
+  Usage hour(DateTime hour) => _hours[hourKey(hour)] ?? const Usage();
+
+  /// Sum of whole days in `[from, to]`, both given as calendar days.
+  Usage daysBetween(DateTime from, DateTime to) {
+    var sum = const Usage();
+    for (var d = startOfDay(from);
+        !d.isAfter(to);
+        d = DateTime(d.year, d.month, d.day + 1)) {
+      sum += day(d);
+    }
+    return sum;
+  }
+
+  Usage today(DateTime now) => day(now);
+  Usage yesterday(DateTime now) =>
+      day(DateTime(now.year, now.month, now.day - 1));
+  Usage week(DateTime now) => daysBetween(startOfWeek(now), now);
+  Usage month(DateTime now) => daysBetween(startOfMonth(now), now);
+
+  List<UsageBucket> hoursOf(DateTime day) => [
+        for (var h = 0; h < 24; h++)
+          UsageBucket(DateTime(day.year, day.month, day.day, h),
+              hour(DateTime(day.year, day.month, day.day, h)))
+      ];
+
+  List<UsageBucket> daysOfWeek(DateTime now) {
+    final start = startOfWeek(now);
+    return [
+      for (var i = 0; i < 7; i++)
+        UsageBucket(DateTime(start.year, start.month, start.day + i),
+            day(DateTime(start.year, start.month, start.day + i)))
+    ];
+  }
+
+  List<UsageBucket> daysOfMonth(DateTime now) {
+    final count = DateTime(now.year, now.month + 1, 0).day;
+    return [
+      for (var i = 1; i <= count; i++)
+        UsageBucket(DateTime(now.year, now.month, i),
+            day(DateTime(now.year, now.month, i)))
+    ];
+  }
+
+  List<UsageBucket> monthsOfYear(DateTime now) => [
+        for (var m = 1; m <= 12; m++)
+          UsageBucket(
+              DateTime(now.year, m),
+              m > now.month
+                  ? const Usage()
+                  : daysBetween(DateTime(now.year, m),
+                      m == now.month ? now : DateTime(now.year, m + 1, 0)))
+      ];
+
+  void prune(DateTime now) {
+    final hourCutoff = hourKey(now.subtract(hourRetention));
+    final dayCutoff = dayKey(now.subtract(dayRetention));
+    _hours.removeWhere((key, _) => key.compareTo(hourCutoff) < 0);
+    _days.removeWhere((key, _) => key.compareTo(dayCutoff) < 0);
+  }
+
+  void clear() {
+    _hours.clear();
+    _days.clear();
+  }
+
+  Map<String, dynamic> toJson() => {
+        'hours': {for (final e in _hours.entries) e.key: e.value.toJson()},
+        'days': {for (final e in _days.entries) e.key: e.value.toJson()},
+      };
+
+  void loadJson(Map<String, dynamic> json) {
+    clear();
+    for (final e in (json['hours'] as Map<String, dynamic>? ?? {}).entries) {
+      _hours[e.key] = Usage.fromJson(e.value);
+    }
+    for (final e in (json['days'] as Map<String, dynamic>? ?? {}).entries) {
+      _days[e.key] = Usage.fromJson(e.value);
+    }
+  }
+
+  /// Imports the pre-ledger `dailyTotals` map (total MB per day, no
+  /// direction). The split is unknown, so the volume is booked as download.
+  void importLegacyDaily(Map<String, dynamic> daily) {
+    for (final e in daily.entries) {
+      final value = (e.value as num).toDouble();
+      if (value > 0) _days[e.key] = Usage(download: value);
+    }
   }
 }
 
